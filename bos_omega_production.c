@@ -33,6 +33,7 @@
 #define MAX_RETRIES 5
 #define MAX_STEPS   32
 #define AUDIT_FILE  "bos_omega_production.log"
+static FILE *audit_fp = NULL;
 
 /* --- LOGGING LEVELS --- */
 typedef enum { LOG_INFO, LOG_WARN, LOG_ERROR, LOG_AUDIT } LogLevel;
@@ -117,10 +118,11 @@ static void logger(LogLevel level, const char *fmt, ...) {
     printf("[%s] ", lvl_str[level]); vprintf(fmt, args); printf("\n");
     va_end(args);
     if (level == LOG_AUDIT || level == LOG_ERROR) {
-        FILE *f = fopen(AUDIT_FILE, "a"); if (f) {
-            fprintf(f, "%ld [%s] ", (long)time(NULL), lvl_str[level]);
-            va_start(args, fmt); vfprintf(f, fmt, args); fprintf(f, "\n");
-            va_end(args); fclose(f);
+        if (!audit_fp) audit_fp = fopen(AUDIT_FILE, "a");
+        if (audit_fp) {
+            fprintf(audit_fp, "%ld [%s] ", (long)time(NULL), lvl_str[level]);
+            va_start(args, fmt); vfprintf(audit_fp, fmt, args); fprintf(audit_fp, "\n");
+            va_end(args); fflush(audit_fp);
         }
     }
 }
@@ -265,5 +267,6 @@ int main(int argc, char **argv) {
         printf("Error: Invalid arguments.\n");
     }
     curl_global_cleanup();
+    if (audit_fp) fclose(audit_fp);
     return 0;
 }
