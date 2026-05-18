@@ -31,7 +31,6 @@
 #define MAX_TEXT    16384
 #define MAX_PATH    1024
 #define MAX_RETRIES 5
-#define MAX_STEPS   32
 #define AUDIT_FILE  "bos_omega_production.log"
 
 /* --- LOGGING LEVELS --- */
@@ -75,8 +74,6 @@ typedef struct {
 
 typedef struct {
     char         objective[MAX_TEXT];
-    char         plan[MAX_STEPS][MAX_TEXT];
-    int          plan_idx;
     int          retry_cnt;
     bool         is_approved;
     RuntimeState state;
@@ -85,7 +82,6 @@ typedef struct {
     RiskLevel    risk;
     char         result[MAX_TEXT];
     char         error_msg[MAX_TEXT];
-    char         audit_msg[MAX_TEXT];
 } AgentRuntime;
 
 typedef struct {
