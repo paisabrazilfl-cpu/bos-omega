@@ -129,6 +129,34 @@ static bool str_has(const char *haystack, const char *needle) {
     return haystack && needle && strcasestr(haystack, needle) != NULL;
 }
 
+static void json_escape(const char *src, char *dest, size_t dest_sz) {
+    size_t j = 0;
+    for (size_t i = 0; src[i] != '\0' && j < dest_sz - 1; i++) {
+        unsigned char c = (unsigned char)src[i];
+        switch (c) {
+            case '\"': if (j + 2 < dest_sz) { dest[j++] = '\\'; dest[j++] = '\"'; } else goto end; break;
+            case '\\': if (j + 2 < dest_sz) { dest[j++] = '\\'; dest[j++] = '\\'; } else goto end; break;
+            case '\b': if (j + 2 < dest_sz) { dest[j++] = '\\'; dest[j++] = 'b'; } else goto end; break;
+            case '\f': if (j + 2 < dest_sz) { dest[j++] = '\\'; dest[j++] = 'f'; } else goto end; break;
+            case '\n': if (j + 2 < dest_sz) { dest[j++] = '\\'; dest[j++] = 'n'; } else goto end; break;
+            case '\r': if (j + 2 < dest_sz) { dest[j++] = '\\'; dest[j++] = 'r'; } else goto end; break;
+            case '\t': if (j + 2 < dest_sz) { dest[j++] = '\\'; dest[j++] = 't'; } else goto end; break;
+            default:
+                if (c < 32) {
+                    if (j + 6 < dest_sz) {
+                        sprintf(&dest[j], "\\u%04x", c);
+                        j += 6;
+                    } else goto end;
+                } else {
+                    dest[j++] = c;
+                }
+                break;
+        }
+    }
+end:
+    dest[j] = '\0';
+}
+
 /* --- GOVERNANCE ENGINE --- */
 static RiskLevel assess_risk(const char *task) {
     if (str_has(task, "buy") || str_has(task, "pay") || str_has(task, "spend")) return R_FINANCIAL;
@@ -205,7 +233,7 @@ static void run_agent(AgentRuntime *rt) {
             const char *key = getenv(ts->env_key);
             if (!key && ts->type != T_CDP) { strcpy(rt->error_msg, "MISSING_API_KEY"); res = DEC_BLOCKED; }
             else {
-                char payload[MAX_TEXT]; snprintf(payload, sizeof(payload), "{\"model\":\"prod\",\"input\":\"%s\"}", rt->objective);
+                char escaped_obj[MAX_TEXT * 2]; json_escape(rt->objective, escaped_obj, sizeof(escaped_obj)); char payload[MAX_TEXT * 2 + 128]; snprintf(payload, sizeof(payload), "{\"model\":\"prod\",\"input\":\"%s\"}", escaped_obj);
                 res = dispatch_http(rt, ts->url, key ? key : "NONE", payload);
             }
         }
