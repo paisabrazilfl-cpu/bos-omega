@@ -1,0 +1,7 @@
+1779121626 [AUDIT] Task: Get-Date"; touch /tmp/vulnerable; # | Tool: 7 | Risk: 0
+1779121675 [AUDIT] Task: Get-Date"; touch /tmp/vulnerable; # | Tool: 7 | Risk: 0
+1779121830 [AUDIT] Task: Get-Date"; touch /tmp/vulnerable_exploit; # | Tool: 7 | Risk: 0
+1779121938 [AUDIT] Task: Get-Date"; touch /tmp/vulnerable_exploit; # | Tool: 7 | Risk: 0
+1779121938 [ERROR] Final State: FAILURE | Reason: SHELL_EXIT_1
+1779121948 [AUDIT] Task: Get-Date | Tool: 7 | Risk: 0
+1779121955 [AUDIT] Task: Get-Date"; touch /tmp/vulnerable_exploit; # | Tool: 7 | Risk: 0

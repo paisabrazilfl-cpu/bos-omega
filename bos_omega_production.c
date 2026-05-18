@@ -26,6 +26,9 @@
 #include <stdarg.h>
 #include <curl/curl.h>
 
+#include <unistd.h>
+#include <sys/wait.h>
+#include <sys/types.h>
 /* --- SYSTEM CONSTANTS --- */
 #define VERSION "3.0.0-PROD"
 #define MAX_TEXT    16384
@@ -173,13 +176,44 @@ static Decision dispatch_http(AgentRuntime *rt, const char *url, const char *key
 
 /* --- AUTOMATION ENGINES --- */
 static Decision dispatch_shell(AgentRuntime *rt, const char *binary, const char *args) {
-    char cmd[MAX_TEXT + 128]; snprintf(cmd, sizeof(cmd), "%s %s \"%s\" 2>&1", binary, args, rt->objective);
-    logger(LOG_INFO, "Executing: %s", cmd);
-    FILE *fp = popen(cmd, "r"); if (!fp) { snprintf(rt->error_msg, MAX_TEXT, "POPEN_FAIL: %s", strerror(errno)); return DEC_RETRY; }
-    size_t n = fread(rt->result, 1, MAX_TEXT - 1, fp); rt->result[n] = 0;
-    int status = pclose(fp);
-    if (status != 0) { snprintf(rt->error_msg, MAX_TEXT, "SHELL_EXIT_%d", status); return DEC_RETRY; }
-    return DEC_COMPLETE;
+    logger(LOG_INFO, "Executing: %s %s %s", binary, args, rt->objective);
+    int pipefd[2];
+    if (pipe(pipefd) == -1) {
+        snprintf(rt->error_msg, MAX_TEXT, "PIPE_FAIL: %s", strerror(errno));
+        return DEC_RETRY;
+    }
+
+    pid_t pid = fork();
+    if (pid == -1) {
+        close(pipefd[0]); close(pipefd[1]);
+        snprintf(rt->error_msg, MAX_TEXT, "FORK_FAIL: %s", strerror(errno));
+        return DEC_RETRY;
+    }
+
+    if (pid == 0) {
+        dup2(pipefd[1], STDOUT_FILENO);
+        dup2(pipefd[1], STDERR_FILENO);
+        close(pipefd[0]); close(pipefd[1]);
+        char *argv[] = {(char *)binary, (char *)args, (char *)rt->objective, NULL};
+        execvp(binary, argv);
+        perror("execvp");
+        _exit(1);
+    } else {
+        close(pipefd[1]);
+        size_t n = 0;
+        while (n < MAX_TEXT - 1) {
+            ssize_t r = read(pipefd[0], rt->result + n, MAX_TEXT - 1 - n);
+            if (r <= 0) break;
+            n += r;
+        }
+        rt->result[n] = 0;
+        close(pipefd[0]);
+        int status;
+        waitpid(pid, &status, 0);
+        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) return DEC_COMPLETE;
+        snprintf(rt->error_msg, MAX_TEXT, "SHELL_EXIT_%d", WIFEXITED(status) ? WEXITSTATUS(status) : -1);
+        return DEC_RETRY;
+    }
 }
 
 /* --- PRODUCTION WORKFLOW --- */
