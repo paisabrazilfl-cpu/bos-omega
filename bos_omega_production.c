@@ -108,7 +108,6 @@ static ToolSpec REGISTRY[] = {
     { T_PWSH,    "POWERSHELL", "PWSH_PATH",       "local", true },
     { T_ADB,     "ANDROID_ADB","ADB_PATH",        "local", true }
 };
-static const int REG_SIZE = sizeof(REGISTRY) / sizeof(REGISTRY[0]);
 
 /* --- CORE UTILITIES --- */
 static void logger(LogLevel level, const char *fmt, ...) {
