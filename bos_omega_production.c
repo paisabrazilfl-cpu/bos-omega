@@ -93,7 +93,7 @@ typedef struct {
 } LangInput;
 
 typedef struct {
-    char goal[MAX_TEXT], lang[MAX_TEXT], why[MAX_TEXT], stack[MAX_TEXT], steps[MAX_TEXT];
+    char goal[MAX_TEXT], lang[MAX_TEXT], why[MAX_TEXT], stack[MAX_TEXT];
 } LangOutput;
 
 /* --- PRODUCTION TOOL REGISTRY --- */
