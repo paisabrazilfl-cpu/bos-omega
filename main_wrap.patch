@@ -1,0 +1,18 @@
+<<<<<<< SEARCH
+/* --- MAIN ENTRY POINT --- */
+int main(int argc, char **argv) {
+=======
+/* --- MAIN ENTRY POINT --- */
+#ifndef UNIT_TEST
+int main(int argc, char **argv) {
+>>>>>>> REPLACE
+<<<<<<< SEARCH
+    curl_global_cleanup();
+    return 0;
+}
+=======
+    curl_global_cleanup();
+    return 0;
+}
+#endif
+>>>>>>> REPLACE

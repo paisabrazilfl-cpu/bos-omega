@@ -245,6 +245,7 @@ static void run_lang(LangInput *in) {
 }
 
 /* --- MAIN ENTRY POINT --- */
+#ifndef UNIT_TEST
 int main(int argc, char **argv) {
     if (argc < 2) {
         printf("BOS-OMEGA PRODUCTION RUNTIME v%s\n", VERSION);
@@ -267,3 +268,4 @@ int main(int argc, char **argv) {
     curl_global_cleanup();
     return 0;
 }
+#endif
