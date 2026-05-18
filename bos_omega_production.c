@@ -89,11 +89,11 @@ typedef struct {
 } AgentRuntime;
 
 typedef struct {
-    char goal[MAX_TEXT], skill[MAX_TEXT], type[MAX_TEXT], plat[MAX_TEXT], time[MAX_TEXT], style[MAX_TEXT], constraints[MAX_TEXT];
+    char goal[MAX_TEXT];
 } LangInput;
 
 typedef struct {
-    char goal[MAX_TEXT], lang[MAX_TEXT], why[MAX_TEXT], stack[MAX_TEXT], steps[MAX_TEXT];
+    char goal[MAX_TEXT], lang[MAX_TEXT], why[MAX_TEXT], stack[MAX_TEXT];
 } LangOutput;
 
 /* --- PRODUCTION TOOL REGISTRY --- */
