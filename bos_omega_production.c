@@ -113,14 +113,18 @@ static const int REG_SIZE = sizeof(REGISTRY) / sizeof(REGISTRY[0]);
 /* --- CORE UTILITIES --- */
 static void logger(LogLevel level, const char *fmt, ...) {
     const char *lvl_str[] = {"INFO", "WARN", "ERROR", "AUDIT"};
+    char msg[MAX_TEXT * 2];
     va_list args; va_start(args, fmt);
-    printf("[%s] ", lvl_str[level]); vprintf(fmt, args); printf("\n");
+    vsnprintf(msg, sizeof(msg), fmt, args);
     va_end(args);
+
+    for (char *p = msg; *p; p++) if (*p == '\n' || *p == '\r') *p = ' ';
+
+    printf("[%s] %s\n", lvl_str[level], msg);
     if (level == LOG_AUDIT || level == LOG_ERROR) {
         FILE *f = fopen(AUDIT_FILE, "a"); if (f) {
-            fprintf(f, "%ld [%s] ", (long)time(NULL), lvl_str[level]);
-            va_start(args, fmt); vfprintf(f, fmt, args); fprintf(f, "\n");
-            va_end(args); fclose(f);
+            fprintf(f, "%ld [%s] %s\n", (long)time(NULL), lvl_str[level], msg);
+            fclose(f);
         }
     }
 }
@@ -129,7 +133,6 @@ static bool str_has(const char *haystack, const char *needle) {
     return haystack && needle && strcasestr(haystack, needle) != NULL;
 }
 
-/* --- GOVERNANCE ENGINE --- */
 static RiskLevel assess_risk(const char *task) {
     if (str_has(task, "buy") || str_has(task, "pay") || str_has(task, "spend")) return R_FINANCIAL;
     if (str_has(task, "delete") || str_has(task, "uninstall") || str_has(task, "rm ") || str_has(task, "wipe") || str_has(task, "Remove-") || str_has(task, "Set-Content")) return R_DESTRUCTIVE;
