@@ -81,7 +81,7 @@ To deploy BOS-OMEGA in a new environment, follow the **Unified Bootstrap Sequenc
    ```bash
    export MISTRAL_API_KEY="your_key"
    export NVIDIA_API_KEY="your_key"
-   export RAILWAY_TOKEN="your_token"
+   export RAILWAY_PROJECT_TOKEN="your_token"
    ```
 3. **Binary Deployment**: Transfer and compile the source:
    ```bash

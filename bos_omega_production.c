@@ -99,7 +99,7 @@ static ToolSpec REGISTRY[] = {
     { T_MISTRAL, "MISTRAL_API_KEY", "https://api.mistral.ai/v1/chat/completions" },
     { T_NVIDIA,  "NVIDIA_API_KEY",  "https://integrate.api.nvidia.com/v1/chat/completions" },
     { T_RERANKER,"RERANKER_KEY",    "https://api.rerank.local/v1" },
-    { T_RAILWAY, "RAILWAY_TOKEN",   "https://backboard.railway.app/graphql/v2" },
+    { T_RAILWAY, "RAILWAY_PROJECT_TOKEN",   "https://backboard.railway.app/graphql/v2" },
     { T_GITHUB,  "GITHUB_TOKEN",    "https://api.github.com" },
     { T_APIFY,   "APIFY_TOKEN",     "https://api.apify.com/v2/acts" },
     { T_CDP,     "CDP_URL",         "http://localhost:9222/json" },
