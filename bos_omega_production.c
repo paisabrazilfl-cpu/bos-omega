@@ -73,8 +73,6 @@ typedef struct {
 
 typedef struct {
     char         objective[MAX_TEXT];
-    char         plan[MAX_STEPS][MAX_TEXT];
-    int          plan_idx;
     int          retry_cnt;
     bool         is_approved;
     RuntimeState state;
@@ -83,15 +81,14 @@ typedef struct {
     RiskLevel    risk;
     char         result[MAX_TEXT];
     char         error_msg[MAX_TEXT];
-    char         audit_msg[MAX_TEXT];
 } AgentRuntime;
 
 typedef struct {
-    char goal[MAX_TEXT], skill[MAX_TEXT], type[MAX_TEXT], plat[MAX_TEXT], time[MAX_TEXT], style[MAX_TEXT], constraints[MAX_TEXT];
+    char goal[MAX_TEXT];
 } LangInput;
 
 typedef struct {
-    char goal[MAX_TEXT], lang[MAX_TEXT], why[MAX_TEXT], stack[MAX_TEXT], steps[MAX_TEXT];
+    char goal[MAX_TEXT], lang[MAX_TEXT], why[MAX_TEXT], stack[MAX_TEXT];
 } LangOutput;
 
 /* --- PRODUCTION TOOL REGISTRY --- */
