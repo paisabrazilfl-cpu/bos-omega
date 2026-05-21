@@ -23,6 +23,7 @@
 #include <stdbool.h>
 #include <time.h>
 #include <errno.h>
+#include <ctype.h>
 #include <stdarg.h>
 #include <curl/curl.h>
 
@@ -125,26 +126,41 @@ static void logger(LogLevel level, const char *fmt, ...) {
     }
 }
 
-static bool str_has(const char *haystack, const char *needle) {
-    return haystack && needle && strcasestr(haystack, needle) != NULL;
+static void str_tolower(char *dest, const char *src, size_t n) {
+    if (!dest || !src || n == 0) return;
+    size_t i;
+    for (i = 0; i < n && src[i]; i++) {
+        dest[i] = (char)tolower((unsigned char)src[i]);
+    }
+    dest[i < n ? i : n - 1] = '\0';
+}
+
+static bool str_has(const char *haystack_low, const char *needle_low) {
+    return haystack_low && needle_low && strstr(haystack_low, needle_low) != NULL;
 }
 
 /* --- GOVERNANCE ENGINE --- */
 static RiskLevel assess_risk(const char *task) {
-    if (str_has(task, "buy") || str_has(task, "pay") || str_has(task, "spend")) return R_FINANCIAL;
-    if (str_has(task, "delete") || str_has(task, "uninstall") || str_has(task, "rm ") || str_has(task, "wipe") || str_has(task, "Remove-") || str_has(task, "Set-Content")) return R_DESTRUCTIVE;
-    if (str_has(task, "push") || str_has(task, "commit") || str_has(task, "api")) return R_EXTERNAL_API;
-    if (str_has(task, "write") || str_has(task, "create") || str_has(task, "save")) return R_LOCAL_WRITE;
+    if (!task) return R_READ_ONLY;
+    char task_low[MAX_TEXT];
+    str_tolower(task_low, task, MAX_TEXT - 1);
+    if (str_has(task_low, "buy") || str_has(task_low, "pay") || str_has(task_low, "spend")) return R_FINANCIAL;
+    if (str_has(task_low, "delete") || str_has(task_low, "uninstall") || str_has(task_low, "rm ") || str_has(task_low, "wipe") || str_has(task_low, "remove-") || str_has(task_low, "set-content")) return R_DESTRUCTIVE;
+    if (str_has(task_low, "push") || str_has(task_low, "commit") || str_has(task_low, "api")) return R_EXTERNAL_API;
+    if (str_has(task_low, "write") || str_has(task_low, "create") || str_has(task_low, "save")) return R_LOCAL_WRITE;
     return R_READ_ONLY;
 }
 
 static ToolType resolve_tool(const char *task) {
-    if (str_has(task, "android") || str_has(task, "adb") || str_has(task, "pm ") || str_has(task, "am ") || str_has(task, "input ")) return T_ADB;
-    if (str_has(task, "Get-") || str_has(task, "Set-") || str_has(task, "pwsh") || str_has(task, "powershell")) return T_PWSH;
-    if (str_has(task, "browser") || str_has(task, "navigate") || str_has(task, "click")) return T_CDP;
-    if (str_has(task, "image") || str_has(task, "visual")) return T_NVIDIA;
-    if (str_has(task, "railway") || str_has(task, "deploy")) return T_RAILWAY;
-    if (str_has(task, "github") || str_has(task, "repo")) return T_GITHUB;
+    if (!task) return T_MISTRAL;
+    char task_low[MAX_TEXT];
+    str_tolower(task_low, task, MAX_TEXT - 1);
+    if (str_has(task_low, "android") || str_has(task_low, "adb") || str_has(task_low, "pm ") || str_has(task_low, "am ") || str_has(task_low, "input ")) return T_ADB;
+    if (str_has(task_low, "get-") || str_has(task_low, "set-") || str_has(task_low, "pwsh") || str_has(task_low, "powershell")) return T_PWSH;
+    if (str_has(task_low, "browser") || str_has(task_low, "navigate") || str_has(task_low, "click")) return T_CDP;
+    if (str_has(task_low, "image") || str_has(task_low, "visual")) return T_NVIDIA;
+    if (str_has(task_low, "railway") || str_has(task_low, "deploy")) return T_RAILWAY;
+    if (str_has(task_low, "github") || str_has(task_low, "repo")) return T_GITHUB;
     return T_MISTRAL;
 }
 
@@ -230,8 +246,11 @@ static void run_agent(AgentRuntime *rt) {
 
 /* --- LANGUAGE DECISION ENGINE --- */
 static void run_lang(LangInput *in) {
+    if (!in) return;
     LangOutput out = {0}; strcpy(out.goal, in->goal);
-    if (str_has(in->goal, "AI") || str_has(in->goal, "agent")) {
+    char goal_low[MAX_TEXT];
+    str_tolower(goal_low, in->goal, MAX_TEXT - 1);
+    if (str_has(goal_low, "ai") || str_has(goal_low, "agent")) {
         strcpy(out.lang, "C / Python / TypeScript");
         strcpy(out.why, "C for core performance, Python for ML, TS for interface.");
         strcpy(out.stack, "BOS-OMEGA Core + FastAPI + Next.js");
