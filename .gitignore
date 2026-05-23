@@ -1,0 +1,4 @@
+bos_omega_prod
+bos_omega_prod_test
+*.log
+node_modules/
