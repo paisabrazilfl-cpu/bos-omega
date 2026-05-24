@@ -24,6 +24,7 @@
 #include <time.h>
 #include <errno.h>
 #include <stdarg.h>
+#include <ctype.h>
 #include <curl/curl.h>
 
 /* --- SYSTEM CONSTANTS --- */
@@ -125,27 +126,55 @@ static void logger(LogLevel level, const char *fmt, ...) {
     }
 }
 
-static bool str_has(const char *haystack, const char *needle) {
-    return haystack && needle && strcasestr(haystack, needle) != NULL;
+/**
+ * Normalizes a string to lowercase. Bounded by size n.
+ * Returns dest.
+ */
+static char *str_tolower(char *dest, const char *src, size_t n) {
+    if (!dest || !src || n == 0) return dest;
+    size_t i;
+    for (i = 0; i < n - 1 && src[i]; i++) {
+        dest[i] = (char)tolower((unsigned char)src[i]);
+    }
+    dest[i] = '\0';
+    return dest;
 }
 
 /* --- GOVERNANCE ENGINE --- */
 static RiskLevel assess_risk(const char *task) {
-    if (str_has(task, "buy") || str_has(task, "pay") || str_has(task, "spend")) return R_FINANCIAL;
-    if (str_has(task, "delete") || str_has(task, "uninstall") || str_has(task, "rm ") || str_has(task, "wipe") || str_has(task, "Remove-") || str_has(task, "Set-Content")) return R_DESTRUCTIVE;
-    if (str_has(task, "push") || str_has(task, "commit") || str_has(task, "api")) return R_EXTERNAL_API;
-    if (str_has(task, "write") || str_has(task, "create") || str_has(task, "save")) return R_LOCAL_WRITE;
-    return R_READ_ONLY;
+    if (!task) return R_READ_ONLY;
+    size_t len = strlen(task) + 1;
+    char *lower = malloc(len);
+    if (!lower) return R_UNKNOWN; // Memory failure, assume unknown/high risk
+    str_tolower(lower, task, len);
+
+    RiskLevel res = R_READ_ONLY;
+    if (strstr(lower, "buy") || strstr(lower, "pay") || strstr(lower, "spend")) res = R_FINANCIAL;
+    else if (strstr(lower, "delete") || strstr(lower, "uninstall") || strstr(lower, "rm ") || strstr(lower, "wipe") || strstr(lower, "remove-") || strstr(lower, "set-content")) res = R_DESTRUCTIVE;
+    else if (strstr(lower, "push") || strstr(lower, "commit") || strstr(lower, "api")) res = R_EXTERNAL_API;
+    else if (strstr(lower, "write") || strstr(lower, "create") || strstr(lower, "save")) res = R_LOCAL_WRITE;
+
+    free(lower);
+    return res;
 }
 
 static ToolType resolve_tool(const char *task) {
-    if (str_has(task, "android") || str_has(task, "adb") || str_has(task, "pm ") || str_has(task, "am ") || str_has(task, "input ")) return T_ADB;
-    if (str_has(task, "Get-") || str_has(task, "Set-") || str_has(task, "pwsh") || str_has(task, "powershell")) return T_PWSH;
-    if (str_has(task, "browser") || str_has(task, "navigate") || str_has(task, "click")) return T_CDP;
-    if (str_has(task, "image") || str_has(task, "visual")) return T_NVIDIA;
-    if (str_has(task, "railway") || str_has(task, "deploy")) return T_RAILWAY;
-    if (str_has(task, "github") || str_has(task, "repo")) return T_GITHUB;
-    return T_MISTRAL;
+    if (!task) return T_MISTRAL;
+    size_t len = strlen(task) + 1;
+    char *lower = malloc(len);
+    if (!lower) return T_NONE;
+    str_tolower(lower, task, len);
+
+    ToolType res = T_MISTRAL;
+    if (strstr(lower, "android") || strstr(lower, "adb") || strstr(lower, "pm ") || strstr(lower, "am ") || strstr(lower, "input ")) res = T_ADB;
+    else if (strstr(lower, "get-") || strstr(lower, "set-") || strstr(lower, "pwsh") || strstr(lower, "powershell")) res = T_PWSH;
+    else if (strstr(lower, "browser") || strstr(lower, "navigate") || strstr(lower, "click")) res = T_CDP;
+    else if (strstr(lower, "image") || strstr(lower, "visual")) res = T_NVIDIA;
+    else if (strstr(lower, "railway") || strstr(lower, "deploy")) res = T_RAILWAY;
+    else if (strstr(lower, "github") || strstr(lower, "repo")) res = T_GITHUB;
+
+    free(lower);
+    return res;
 }
 
 /* --- NETWORK LAYER --- */
@@ -230,8 +259,14 @@ static void run_agent(AgentRuntime *rt) {
 
 /* --- LANGUAGE DECISION ENGINE --- */
 static void run_lang(LangInput *in) {
+    if (!in) return;
     LangOutput out = {0}; strcpy(out.goal, in->goal);
-    if (str_has(in->goal, "AI") || str_has(in->goal, "agent")) {
+    size_t len = strlen(in->goal) + 1;
+    char *lower_goal = malloc(len);
+    if (!lower_goal) return;
+    str_tolower(lower_goal, in->goal, len);
+
+    if (strstr(lower_goal, "ai") || strstr(lower_goal, "agent")) {
         strcpy(out.lang, "C / Python / TypeScript");
         strcpy(out.why, "C for core performance, Python for ML, TS for interface.");
         strcpy(out.stack, "BOS-OMEGA Core + FastAPI + Next.js");
@@ -240,6 +275,7 @@ static void run_lang(LangInput *in) {
         strcpy(out.why, "Modern safety and scalability.");
         strcpy(out.stack, "Node.js + PostgreSQL + Docker");
     }
+    free(lower_goal);
     printf("\n--- PRODUCTION LANGUAGE RECOMMENDATION ---\n");
     printf("Detected Goal: %s\nPrimary Language: %s\nReasoning: %s\nFull Stack: %s\n", out.goal, out.lang, out.why, out.stack);
 }
