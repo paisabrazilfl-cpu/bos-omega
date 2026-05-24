@@ -1,0 +1,3 @@
+## 2026-05-24 - [C Runtime String Search Optimization & Security Hardening]
+**Learning:** Initial optimization using a fixed-size stack buffer for case-insensitive searches (pre-lowercasing the haystack) introduced a security bypass vulnerability due to truncation. Large input strings could hide malicious keywords beyond the buffer limit.
+**Action:** Use dynamic allocation (`malloc`) for normalized string buffers to match the input size exactly, ensuring no truncation. Always prioritize security completeness over micro-optimization performance if there's a conflict. Fall back to safe defaults (e.g., `R_UNKNOWN`) if allocation fails.
