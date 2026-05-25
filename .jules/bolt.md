@@ -1,0 +1,3 @@
+## 2025-05-25 - [String Search Performance Optimization]
+**Learning:** In string-heavy security and routing paths, multiple calls to case-insensitive functions like `strcasestr` can be a bottleneck for large inputs (e.g., 16KB). Normalizing the input once into a lowercase buffer and using `strstr` can provide a ~4x speedup. However, for security, using dynamic allocation (`malloc`) is necessary to prevent bypasses via truncation that would occur with fixed-size stack buffers.
+**Action:** Use pre-lowercasing with dynamic allocation for functions that perform multiple searches on the same large input. Document the performance gain and ensure memory is properly freed.
