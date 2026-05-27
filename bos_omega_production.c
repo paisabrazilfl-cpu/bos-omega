@@ -24,6 +24,7 @@
 #include <time.h>
 #include <errno.h>
 #include <stdarg.h>
+#include <ctype.h>
 #include <curl/curl.h>
 
 /* --- SYSTEM CONSTANTS --- */
@@ -125,27 +126,54 @@ static void logger(LogLevel level, const char *fmt, ...) {
     }
 }
 
+static void str_tolower(char *dest, const char *src, size_t n) {
+    if (!dest || !src || n == 0) return;
+    size_t i;
+    for (i = 0; i < n - 1 && src[i]; i++) {
+        dest[i] = (char)tolower((unsigned char)src[i]);
+    }
+    dest[i] = '\0';
+}
+
 static bool str_has(const char *haystack, const char *needle) {
     return haystack && needle && strcasestr(haystack, needle) != NULL;
 }
 
 /* --- GOVERNANCE ENGINE --- */
 static RiskLevel assess_risk(const char *task) {
-    if (str_has(task, "buy") || str_has(task, "pay") || str_has(task, "spend")) return R_FINANCIAL;
-    if (str_has(task, "delete") || str_has(task, "uninstall") || str_has(task, "rm ") || str_has(task, "wipe") || str_has(task, "Remove-") || str_has(task, "Set-Content")) return R_DESTRUCTIVE;
-    if (str_has(task, "push") || str_has(task, "commit") || str_has(task, "api")) return R_EXTERNAL_API;
-    if (str_has(task, "write") || str_has(task, "create") || str_has(task, "save")) return R_LOCAL_WRITE;
-    return R_READ_ONLY;
+    if (!task) return R_READ_ONLY;
+    size_t len = strlen(task);
+    char *low = malloc(len + 1);
+    if (!low) return R_READ_ONLY;
+    str_tolower(low, task, len + 1);
+
+    RiskLevel res = R_READ_ONLY;
+    if (strstr(low, "buy") || strstr(low, "pay") || strstr(low, "spend")) res = R_FINANCIAL;
+    else if (strstr(low, "delete") || strstr(low, "uninstall") || strstr(low, "rm ") || strstr(low, "wipe") || strstr(low, "remove-") || strstr(low, "set-content")) res = R_DESTRUCTIVE;
+    else if (strstr(low, "push") || strstr(low, "commit") || strstr(low, "api")) res = R_EXTERNAL_API;
+    else if (strstr(low, "write") || strstr(low, "create") || strstr(low, "save")) res = R_LOCAL_WRITE;
+
+    free(low);
+    return res;
 }
 
 static ToolType resolve_tool(const char *task) {
-    if (str_has(task, "android") || str_has(task, "adb") || str_has(task, "pm ") || str_has(task, "am ") || str_has(task, "input ")) return T_ADB;
-    if (str_has(task, "Get-") || str_has(task, "Set-") || str_has(task, "pwsh") || str_has(task, "powershell")) return T_PWSH;
-    if (str_has(task, "browser") || str_has(task, "navigate") || str_has(task, "click")) return T_CDP;
-    if (str_has(task, "image") || str_has(task, "visual")) return T_NVIDIA;
-    if (str_has(task, "railway") || str_has(task, "deploy")) return T_RAILWAY;
-    if (str_has(task, "github") || str_has(task, "repo")) return T_GITHUB;
-    return T_MISTRAL;
+    if (!task) return T_MISTRAL;
+    size_t len = strlen(task);
+    char *low = malloc(len + 1);
+    if (!low) return T_MISTRAL;
+    str_tolower(low, task, len + 1);
+
+    ToolType res = T_MISTRAL;
+    if (strstr(low, "android") || strstr(low, "adb") || strstr(low, "pm ") || strstr(low, "am ") || strstr(low, "input ")) res = T_ADB;
+    else if (strstr(low, "get-") || strstr(low, "set-") || strstr(low, "pwsh") || strstr(low, "powershell")) res = T_PWSH;
+    else if (strstr(low, "browser") || strstr(low, "navigate") || strstr(low, "click")) res = T_CDP;
+    else if (strstr(low, "image") || strstr(low, "visual")) res = T_NVIDIA;
+    else if (strstr(low, "railway") || strstr(low, "deploy")) res = T_RAILWAY;
+    else if (strstr(low, "github") || strstr(low, "repo")) res = T_GITHUB;
+
+    free(low);
+    return res;
 }
 
 /* --- NETWORK LAYER --- */
@@ -205,7 +233,7 @@ static void run_agent(AgentRuntime *rt) {
             const char *key = getenv(ts->env_key);
             if (!key && ts->type != T_CDP) { strcpy(rt->error_msg, "MISSING_API_KEY"); res = DEC_BLOCKED; }
             else {
-                char payload[MAX_TEXT]; snprintf(payload, sizeof(payload), "{\"model\":\"prod\",\"input\":\"%s\"}", rt->objective);
+                char payload[MAX_TEXT + 1024]; snprintf(payload, sizeof(payload), "{\"model\":\"prod\",\"input\":\"%s\"}", rt->objective);
                 res = dispatch_http(rt, ts->url, key ? key : "NONE", payload);
             }
         }
@@ -230,15 +258,22 @@ static void run_agent(AgentRuntime *rt) {
 
 /* --- LANGUAGE DECISION ENGINE --- */
 static void run_lang(LangInput *in) {
+    if (!in) return;
     LangOutput out = {0}; strcpy(out.goal, in->goal);
-    if (str_has(in->goal, "AI") || str_has(in->goal, "agent")) {
-        strcpy(out.lang, "C / Python / TypeScript");
-        strcpy(out.why, "C for core performance, Python for ML, TS for interface.");
-        strcpy(out.stack, "BOS-OMEGA Core + FastAPI + Next.js");
-    } else {
-        strcpy(out.lang, "TypeScript / Rust");
-        strcpy(out.why, "Modern safety and scalability.");
-        strcpy(out.stack, "Node.js + PostgreSQL + Docker");
+    size_t len = strlen(in->goal);
+    char *low = malloc(len + 1);
+    if (low) {
+        str_tolower(low, in->goal, len + 1);
+        if (strstr(low, "ai") || strstr(low, "agent")) {
+            strcpy(out.lang, "C / Python / TypeScript");
+            strcpy(out.why, "C for core performance, Python for ML, TS for interface.");
+            strcpy(out.stack, "BOS-OMEGA Core + FastAPI + Next.js");
+        } else {
+            strcpy(out.lang, "TypeScript / Rust");
+            strcpy(out.why, "Modern safety and scalability.");
+            strcpy(out.stack, "Node.js + PostgreSQL + Docker");
+        }
+        free(low);
     }
     printf("\n--- PRODUCTION LANGUAGE RECOMMENDATION ---\n");
     printf("Detected Goal: %s\nPrimary Language: %s\nReasoning: %s\nFull Stack: %s\n", out.goal, out.lang, out.why, out.stack);
