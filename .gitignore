@@ -1,0 +1,9 @@
+bos_omega_prod
+bos_omega_prod_test
+verify_logic
+benchmark_search
+*.log
+*.o
+node_modules/
+dist/
+.jules/
