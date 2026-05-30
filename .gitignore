@@ -1,0 +1,12 @@
+# Binaries
+bos_omega_prod
+bos_omega_prod_test
+benchmark_search
+verify_logic
+
+# Logs
+*.log
+
+# Node
+node_modules/
+dist/
