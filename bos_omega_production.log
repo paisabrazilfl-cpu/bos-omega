@@ -1,0 +1,7 @@
+1780240587 [AUDIT] Task: rm -rf / | Tool: 0 | Risk: 3
+1780240650 [AUDIT] Task: RM -RF / | Tool: 0 | Risk: 3
+1780240659 [AUDIT] Task: adb shell ls | Tool: 8 | Risk: 0
+1780240659 [ERROR] Final State: FAILURE | Reason: SHELL_EXIT_256
+1780240659 [AUDIT] Task: pwsh get-date | Tool: 7 | Risk: 0
+1780240659 [ERROR] Final State: FAILURE | Reason: SHELL_EXIT_32512
+1780240776 [AUDIT] Task: RM -RF / | Tool: 0 | Risk: 3
