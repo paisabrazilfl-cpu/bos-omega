@@ -1,0 +1,5 @@
+1780501215 [AUDIT] Task: adb shell ls | Tool: 8 | Risk: 0
+1780501215 [ERROR] Final State: FAILURE | Reason: SHELL_EXIT_256
+1780501215 [AUDIT] Task: rm -rf / | Tool: 0 | Risk: 3
+1780501215 [ERROR] Execution Blocked: MISSING_API_KEY
+1780501215 [ERROR] Final State: FAILURE | Reason: MISSING_API_KEY
