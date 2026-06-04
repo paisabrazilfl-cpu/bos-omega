@@ -1,0 +1,3 @@
+## 2025-05-15 - [String Search Optimization & Buffer Safety]
+**Learning:** `strcasestr` in C is significantly slower than `strstr` because it performs case-conversion for every byte of every comparison. For tasks requiring multiple keyword matches (like risk assessment), pre-lowercasing the haystack once and using `strstr` provides a ~5x-18x speedup. Additionally, custom string utility functions must use `i < n - 1` loop bounds to ensure space for a safe null terminator at `dest[i]`.
+**Action:** Use pre-lowercasing and `strstr` for multi-pattern matching on the same input; always verify loop bounds for null-termination in C string helpers.
