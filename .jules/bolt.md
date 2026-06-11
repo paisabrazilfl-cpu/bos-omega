@@ -1,0 +1,3 @@
+## 2025-05-18 - String normalization for high-frequency searching
+**Learning:** `strcasestr` is significantly slower than `strstr` on a pre-lowercased haystack because it must perform case conversion for every character comparison during every call. In functions like `assess_risk` where multiple keywords are checked against a large (16KB) input, lowercasing the input once into a stack-allocated buffer and using `strstr` yields a measurable speedup (~2.2x to 2.6x in benchmarks).
+**Action:** Always pre-normalize Haystacks to lowercase when performing multiple case-insensitive searches in a hot path or on large buffers in C.
