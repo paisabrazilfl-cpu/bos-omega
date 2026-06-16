@@ -1,0 +1,5 @@
+1781624372 [AUDIT] Task: ADB shell ls | Tool: 8 | Risk: 0
+1781624372 [ERROR] Final State: FAILURE | Reason: SHELL_EXIT_256
+1781624381 [AUDIT] Task: RM -RF / | Tool: 0 | Risk: 3
+1781624381 [ERROR] Execution Blocked: MISSING_API_KEY
+1781624381 [ERROR] Final State: FAILURE | Reason: MISSING_API_KEY
