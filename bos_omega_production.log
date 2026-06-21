@@ -1,0 +1,5 @@
+1782056329 [AUDIT] Task: rm -rf / | Tool: 0 | Risk: 3
+1782056329 [ERROR] Execution Blocked: MISSING_API_KEY
+1782056329 [ERROR] Final State: FAILURE | Reason: MISSING_API_KEY
+1782056329 [AUDIT] Task: adb shell ls | Tool: 8 | Risk: 0
+1782056330 [ERROR] Final State: FAILURE | Reason: SHELL_EXIT_256
