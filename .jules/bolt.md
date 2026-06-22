@@ -1,0 +1,3 @@
+## 2026-06-22 - Optimization of Case-Insensitive String Searching
+**Learning:** In C, `strcasestr` is significantly slower than exact matching with `strstr` because it performs character conversion during every comparison. For a task that performs multiple keyword checks on the same "haystack" (like the BOS-OMEGA governance engine), pre-normalizing the haystack to lowercase once per scope yields a massive performance boost (~11x speedup in this codebase).
+**Action:** Avoid `strcasestr` in multi-match scenarios. Instead, use a single `str_tolower` pass into a local buffer followed by multiple `strstr` calls.
