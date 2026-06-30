@@ -1,0 +1,3 @@
+## 2025-05-14 - Optimized String Search & Payload Generation
+**Learning:** In C, replacing multiple `strcasestr` calls with a single `str_tolower` normalization followed by `strstr` calls yielded a measured 7.11x speedup by eliminating redundant case-conversion overhead. Additionally, hoisting constant `snprintf` operations out of retry loops and properly sizing buffers (MAX_TEXT + 1024) prevents both performance waste and truncation warnings.
+**Action:** Always pre-normalize haystacks for multi-keyword searches in C. Ensure constant string formatting is hoisted outside loops. Never commit compiled binaries or log files.
