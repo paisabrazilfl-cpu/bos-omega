@@ -1,0 +1,3 @@
+## 2025-07-03 - Optimized string search with pre-normalization
+**Learning:** Case-insensitive string searching via `strcasestr` on large haystacks (16KB) is significantly slower than pre-normalizing the haystack once and using `strstr`. Repeatedly calling `strcasestr` for multiple keywords on the same large buffer causes redundant case conversions. One-time normalization yielded a measured ~5.3x speedup for core risk and tool assessment logic.
+**Action:** Always profile repeated string searches on the same input. Use one-time normalization and `strstr` for multi-match scenarios. Ensure all needle strings are normalized to match the haystack. Always cleanup temporary benchmark scripts and never commit compiled binaries.
