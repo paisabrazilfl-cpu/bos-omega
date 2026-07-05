@@ -22,6 +22,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <time.h>
+#include <ctype.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <curl/curl.h>
@@ -108,7 +109,6 @@ static ToolSpec REGISTRY[] = {
     { T_PWSH,    "POWERSHELL", "PWSH_PATH",       "local", true },
     { T_ADB,     "ANDROID_ADB","ADB_PATH",        "local", true }
 };
-static const int REG_SIZE = sizeof(REGISTRY) / sizeof(REGISTRY[0]);
 
 /* --- CORE UTILITIES --- */
 static void logger(LogLevel level, const char *fmt, ...) {
@@ -125,26 +125,24 @@ static void logger(LogLevel level, const char *fmt, ...) {
     }
 }
 
-static bool str_has(const char *haystack, const char *needle) {
-    return haystack && needle && strcasestr(haystack, needle) != NULL;
-}
-
 /* --- GOVERNANCE ENGINE --- */
 static RiskLevel assess_risk(const char *task) {
-    if (str_has(task, "buy") || str_has(task, "pay") || str_has(task, "spend")) return R_FINANCIAL;
-    if (str_has(task, "delete") || str_has(task, "uninstall") || str_has(task, "rm ") || str_has(task, "wipe") || str_has(task, "Remove-") || str_has(task, "Set-Content")) return R_DESTRUCTIVE;
-    if (str_has(task, "push") || str_has(task, "commit") || str_has(task, "api")) return R_EXTERNAL_API;
-    if (str_has(task, "write") || str_has(task, "create") || str_has(task, "save")) return R_LOCAL_WRITE;
+    /* Optimized: uses strstr with pre-lowercased task buffer */
+    if (strstr(task, "buy") || strstr(task, "pay") || strstr(task, "spend")) return R_FINANCIAL;
+    if (strstr(task, "delete") || strstr(task, "uninstall") || strstr(task, "rm ") || strstr(task, "wipe") || strstr(task, "remove-") || strstr(task, "set-content")) return R_DESTRUCTIVE;
+    if (strstr(task, "push") || strstr(task, "commit") || strstr(task, "api")) return R_EXTERNAL_API;
+    if (strstr(task, "write") || strstr(task, "create") || strstr(task, "save")) return R_LOCAL_WRITE;
     return R_READ_ONLY;
 }
 
 static ToolType resolve_tool(const char *task) {
-    if (str_has(task, "android") || str_has(task, "adb") || str_has(task, "pm ") || str_has(task, "am ") || str_has(task, "input ")) return T_ADB;
-    if (str_has(task, "Get-") || str_has(task, "Set-") || str_has(task, "pwsh") || str_has(task, "powershell")) return T_PWSH;
-    if (str_has(task, "browser") || str_has(task, "navigate") || str_has(task, "click")) return T_CDP;
-    if (str_has(task, "image") || str_has(task, "visual")) return T_NVIDIA;
-    if (str_has(task, "railway") || str_has(task, "deploy")) return T_RAILWAY;
-    if (str_has(task, "github") || str_has(task, "repo")) return T_GITHUB;
+    /* Optimized: uses strstr with pre-lowercased task buffer */
+    if (strstr(task, "android") || strstr(task, "adb") || strstr(task, "pm ") || strstr(task, "am ") || strstr(task, "input ")) return T_ADB;
+    if (strstr(task, "get-") || strstr(task, "set-") || strstr(task, "pwsh") || strstr(task, "powershell")) return T_PWSH;
+    if (strstr(task, "browser") || strstr(task, "navigate") || strstr(task, "click")) return T_CDP;
+    if (strstr(task, "image") || strstr(task, "visual")) return T_NVIDIA;
+    if (strstr(task, "railway") || strstr(task, "deploy")) return T_RAILWAY;
+    if (strstr(task, "github") || strstr(task, "repo")) return T_GITHUB;
     return T_MISTRAL;
 }
 
@@ -185,8 +183,17 @@ static Decision dispatch_shell(AgentRuntime *rt, const char *binary, const char 
 /* --- PRODUCTION WORKFLOW --- */
 static void run_agent(AgentRuntime *rt) {
     logger(LOG_INFO, "Initializing BOS-OMEGA Production Runtime v%s", VERSION);
-    rt->state = ST_ROUTE; rt->tool = resolve_tool(rt->objective);
-    rt->risk = assess_risk(rt->objective);
+    rt->state = ST_ROUTE;
+
+    /* Pre-normalize objective for optimized searching using stack buffer */
+    char lower_obj[MAX_TEXT];
+    strncpy(lower_obj, rt->objective, MAX_TEXT - 1);
+    lower_obj[MAX_TEXT - 1] = '\0';
+    for (char *p = lower_obj; *p; p++) *p = tolower((unsigned char)*p);
+
+    rt->tool = resolve_tool(lower_obj);
+    rt->risk = assess_risk(lower_obj);
+
     logger(LOG_AUDIT, "Task: %s | Tool: %d | Risk: %d", rt->objective, rt->tool, rt->risk);
 
     if (rt->risk >= R_DESTRUCTIVE && !rt->is_approved) {
@@ -231,7 +238,16 @@ static void run_agent(AgentRuntime *rt) {
 /* --- LANGUAGE DECISION ENGINE --- */
 static void run_lang(LangInput *in) {
     LangOutput out = {0}; strcpy(out.goal, in->goal);
-    if (str_has(in->goal, "AI") || str_has(in->goal, "agent")) {
+
+    /* Pre-normalize goal for optimized searching using stack buffer */
+    char lower_goal[MAX_TEXT];
+    strncpy(lower_goal, in->goal, MAX_TEXT - 1);
+    lower_goal[MAX_TEXT - 1] = '\0';
+    for (char *p = lower_goal; *p; p++) *p = tolower((unsigned char)*p);
+
+    bool is_ai = (strstr(lower_goal, "ai") || strstr(lower_goal, "agent"));
+
+    if (is_ai) {
         strcpy(out.lang, "C / Python / TypeScript");
         strcpy(out.why, "C for core performance, Python for ML, TS for interface.");
         strcpy(out.stack, "BOS-OMEGA Core + FastAPI + Next.js");
