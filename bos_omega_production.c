@@ -24,6 +24,7 @@
 #include <time.h>
 #include <errno.h>
 #include <stdarg.h>
+#include <ctype.h>
 #include <curl/curl.h>
 
 /* --- SYSTEM CONSTANTS --- */
@@ -108,7 +109,6 @@ static ToolSpec REGISTRY[] = {
     { T_PWSH,    "POWERSHELL", "PWSH_PATH",       "local", true },
     { T_ADB,     "ANDROID_ADB","ADB_PATH",        "local", true }
 };
-static const int REG_SIZE = sizeof(REGISTRY) / sizeof(REGISTRY[0]);
 
 /* --- CORE UTILITIES --- */
 static void logger(LogLevel level, const char *fmt, ...) {
@@ -125,26 +125,31 @@ static void logger(LogLevel level, const char *fmt, ...) {
     }
 }
 
-static bool str_has(const char *haystack, const char *needle) {
-    return haystack && needle && strcasestr(haystack, needle) != NULL;
+static void normalize(const char *src, char *dest) {
+    if (!src) { dest[0] = '\0'; return; }
+    int i;
+    for (i = 0; i < MAX_TEXT - 1 && src[i]; i++) {
+        dest[i] = tolower((unsigned char)src[i]);
+    }
+    dest[i] = '\0';
 }
 
 /* --- GOVERNANCE ENGINE --- */
-static RiskLevel assess_risk(const char *task) {
-    if (str_has(task, "buy") || str_has(task, "pay") || str_has(task, "spend")) return R_FINANCIAL;
-    if (str_has(task, "delete") || str_has(task, "uninstall") || str_has(task, "rm ") || str_has(task, "wipe") || str_has(task, "Remove-") || str_has(task, "Set-Content")) return R_DESTRUCTIVE;
-    if (str_has(task, "push") || str_has(task, "commit") || str_has(task, "api")) return R_EXTERNAL_API;
-    if (str_has(task, "write") || str_has(task, "create") || str_has(task, "save")) return R_LOCAL_WRITE;
+static RiskLevel assess_risk(const char *task_norm) {
+    if (strstr(task_norm, "buy") || strstr(task_norm, "pay") || strstr(task_norm, "spend")) return R_FINANCIAL;
+    if (strstr(task_norm, "delete") || strstr(task_norm, "uninstall") || strstr(task_norm, "rm ") || strstr(task_norm, "wipe") || strstr(task_norm, "remove-") || strstr(task_norm, "set-content")) return R_DESTRUCTIVE;
+    if (strstr(task_norm, "push") || strstr(task_norm, "commit") || strstr(task_norm, "api")) return R_EXTERNAL_API;
+    if (strstr(task_norm, "write") || strstr(task_norm, "create") || strstr(task_norm, "save")) return R_LOCAL_WRITE;
     return R_READ_ONLY;
 }
 
-static ToolType resolve_tool(const char *task) {
-    if (str_has(task, "android") || str_has(task, "adb") || str_has(task, "pm ") || str_has(task, "am ") || str_has(task, "input ")) return T_ADB;
-    if (str_has(task, "Get-") || str_has(task, "Set-") || str_has(task, "pwsh") || str_has(task, "powershell")) return T_PWSH;
-    if (str_has(task, "browser") || str_has(task, "navigate") || str_has(task, "click")) return T_CDP;
-    if (str_has(task, "image") || str_has(task, "visual")) return T_NVIDIA;
-    if (str_has(task, "railway") || str_has(task, "deploy")) return T_RAILWAY;
-    if (str_has(task, "github") || str_has(task, "repo")) return T_GITHUB;
+static ToolType resolve_tool(const char *task_norm) {
+    if (strstr(task_norm, "android") || strstr(task_norm, "adb") || strstr(task_norm, "pm ") || strstr(task_norm, "am ") || strstr(task_norm, "input ")) return T_ADB;
+    if (strstr(task_norm, "get-") || strstr(task_norm, "set-") || strstr(task_norm, "pwsh") || strstr(task_norm, "powershell")) return T_PWSH;
+    if (strstr(task_norm, "browser") || strstr(task_norm, "navigate") || strstr(task_norm, "click")) return T_CDP;
+    if (strstr(task_norm, "image") || strstr(task_norm, "visual")) return T_NVIDIA;
+    if (strstr(task_norm, "railway") || strstr(task_norm, "deploy")) return T_RAILWAY;
+    if (strstr(task_norm, "github") || strstr(task_norm, "repo")) return T_GITHUB;
     return T_MISTRAL;
 }
 
@@ -184,9 +189,11 @@ static Decision dispatch_shell(AgentRuntime *rt, const char *binary, const char 
 
 /* --- PRODUCTION WORKFLOW --- */
 static void run_agent(AgentRuntime *rt) {
+    char norm[MAX_TEXT];
+    normalize(rt->objective, norm);
     logger(LOG_INFO, "Initializing BOS-OMEGA Production Runtime v%s", VERSION);
-    rt->state = ST_ROUTE; rt->tool = resolve_tool(rt->objective);
-    rt->risk = assess_risk(rt->objective);
+    rt->state = ST_ROUTE; rt->tool = resolve_tool(norm);
+    rt->risk = assess_risk(norm);
     logger(LOG_AUDIT, "Task: %s | Tool: %d | Risk: %d", rt->objective, rt->tool, rt->risk);
 
     if (rt->risk >= R_DESTRUCTIVE && !rt->is_approved) {
@@ -230,8 +237,10 @@ static void run_agent(AgentRuntime *rt) {
 
 /* --- LANGUAGE DECISION ENGINE --- */
 static void run_lang(LangInput *in) {
+    char norm[MAX_TEXT];
+    normalize(in->goal, norm);
     LangOutput out = {0}; strcpy(out.goal, in->goal);
-    if (str_has(in->goal, "AI") || str_has(in->goal, "agent")) {
+    if (strstr(norm, "ai") || strstr(norm, "agent")) {
         strcpy(out.lang, "C / Python / TypeScript");
         strcpy(out.why, "C for core performance, Python for ML, TS for interface.");
         strcpy(out.stack, "BOS-OMEGA Core + FastAPI + Next.js");
