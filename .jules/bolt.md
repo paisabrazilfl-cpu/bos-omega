@@ -1,0 +1,3 @@
+## 2025-01-24 - Optimization of keyword scanning in C
+**Learning:** `strcasestr` is significantly slower than `strstr` because it performs character conversion during every comparison. For functions like `assess_risk` or `resolve_tool` that perform multiple keyword matches on the same input, pre-normalizing the input string to lowercase once and using `strstr` reduces complexity from O(N*M) to O(N+M) where N is input length and M is total keyword length.
+**Action:** Always pre-normalize haystacks when performing multiple case-insensitive matches in a single scope. Ensure the normalization function correctly null-terminates the destination string to avoid searching through garbage memory.
