@@ -52,7 +52,10 @@ typedef enum {
 /* --- TOOL CLASSIFICATION --- */
 typedef enum {
     T_MISTRAL, T_NVIDIA, T_RERANKER, T_RAILWAY, T_GITHUB, T_APIFY, 
-    T_CDP, T_PWSH, T_ADB, T_NONE
+    T_CDP, T_PWSH, T_ADB, T_KIMI, T_COMPOSIO, T_RESEND, T_STEEL,
+    T_FIRECRAWL, T_SCRAPINGBEE, T_SCRAPFLY, T_SCREENSHOTONE, T_EXA,
+    T_TAVILY, T_HELICONE, T_E2B, T_OPENAI, T_PINECONE, T_INNGEST,
+    T_DISCORD, T_NONE
 } ToolType;
 
 /* --- RISK ASSESSMENT --- */
@@ -108,7 +111,23 @@ static ToolSpec REGISTRY[] = {
     { T_APIFY,   "APIFY",      "APIFY_TOKEN",     "https://api.apify.com/v2/acts", true },
     { T_CDP,     "BROWSER",    "CDP_URL",         "http://localhost:9222/json", true },
     { T_PWSH,    "POWERSHELL", "PWSH_PATH",       "local", true },
-    { T_ADB,     "ANDROID_ADB","ADB_PATH",        "local", true }
+    { T_ADB,     "ANDROID_ADB","ADB_PATH",        "local", true },
+    { T_KIMI,    "KIMI",       "KIMI_API_KEY",    "https://api.moonshot.cn/v1/chat/completions", true },
+    { T_COMPOSIO,"COMPOSIO",   "COMPOSIO_API_KEY","https://api.composio.dev/v1", true },
+    { T_RESEND,  "RESEND",     "RESEND_API_KEY",  "https://api.resend.com/emails", true },
+    { T_STEEL,   "STEEL",      "STEEL_API_KEY",   "https://api.steel.dev/v1", true },
+    { T_FIRECRAWL,"FIRECRAWL", "FIRECRAWL_API_KEY","https://api.firecrawl.dev/v1", true },
+    { T_SCRAPINGBEE,"SCRAPINGBEE","SCRAPINGBEE_API_KEY","https://app.scrapingbee.com/api/v1/", true },
+    { T_SCRAPFLY,"SCRAPFLY",   "SCRAPFLY_API_KEY","https://api.scrapfly.io/scrape", true },
+    { T_SCREENSHOTONE,"SCREENSHOTONE","SCREENSHOTONE_ACCESS_KEY","https://api.screenshotone.com/take", true },
+    { T_EXA,     "EXA",        "EXA_API_KEY",     "https://api.exa.ai/search", true },
+    { T_TAVILY,  "TAVILY",     "TAVILY_API_KEY",  "https://api.tavily.com/search", true },
+    { T_HELICONE,"HELICONE",   "HELICONE_API_KEY","https://api.hconeai.com/v1", true },
+    { T_E2B,     "E2B",        "E2B_API_KEY",     "https://api.e2b.dev/v1", true },
+    { T_OPENAI,  "OPENAI",     "OPENAI_API_KEY",  "https://api.openai.com/v1/chat/completions", true },
+    { T_PINECONE,"PINECONE",   "PINECONE_API_KEY","https://api.pinecone.io", true },
+    { T_INNGEST, "INNGEST",    "INNGEST_EVENT_KEY","https://inn.gs/", true },
+    { T_DISCORD, "DISCORD",    "DISCORD_BOT_TOKEN","https://discord.com/api/v10", true }
 };
 /* --- CORE UTILITIES --- */
 static void logger(LogLevel level, const char *fmt, ...) {
@@ -186,8 +205,25 @@ static ToolType resolve_tool(const char *norm_task) {
     if (strstr(norm_task, "browser") || strstr(norm_task, "navigate") || strstr(norm_task, "click")) return T_CDP;
     if (strstr(norm_task, "image") || strstr(norm_task, "visual")) return T_NVIDIA;
     if (strstr(norm_task, "railway") || strstr(norm_task, "deploy")) return T_RAILWAY;
-    if (strstr(norm_task, "github") || strstr(norm_task, "repo")) return T_GITHUB;
-    return T_MISTRAL;
+    if (strstr(norm_task, "github") || strstr(norm_task, "repo") || strstr(norm_task, "commit")) return T_GITHUB;
+    if (strstr(norm_task, "kimi") || strstr(norm_task, "moonshot")) return T_KIMI;
+    if (strstr(norm_task, "composio")) return T_COMPOSIO;
+    if (strstr(norm_task, "email") || strstr(norm_task, "resend") || strstr(norm_task, "mail")) return T_RESEND;
+    if (strstr(norm_task, "steel")) return T_STEEL;
+    if (strstr(norm_task, "crawl") || strstr(norm_task, "firecrawl")) return T_FIRECRAWL;
+    if (strstr(norm_task, "scrapingbee") || strstr(norm_task, "scrapebee")) return T_SCRAPINGBEE;
+    if (strstr(norm_task, "scrapfly") || strstr(norm_task, "scrapefly")) return T_SCRAPFLY;
+    if (strstr(norm_task, "screenshot")) return T_SCREENSHOTONE;
+    if (strstr(norm_task, "exa") || strstr(norm_task, "find out")) return T_EXA;
+    if (strstr(norm_task, "tavily") || strstr(norm_task, "search web")) return T_TAVILY;
+    if (strstr(norm_task, "helicone")) return T_HELICONE;
+    if (strstr(norm_task, "e2b") || strstr(norm_task, "sandbox")) return T_E2B;
+    if (strstr(norm_task, "openai") || strstr(norm_task, "gpt")) return T_OPENAI;
+    if (strstr(norm_task, "pinecone") || strstr(norm_task, "vector") || strstr(norm_task, "embed")) return T_PINECONE;
+    if (strstr(norm_task, "inngest") || strstr(norm_task, "event")) return T_INNGEST;
+    if (strstr(norm_task, "discord") || strstr(norm_task, "message chat")) return T_DISCORD;
+
+    return T_MISTRAL; // Default AI provider
 }
 
 /* --- NETWORK LAYER --- */
