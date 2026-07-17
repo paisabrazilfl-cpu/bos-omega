@@ -78,6 +78,7 @@ typedef struct {
     char         objective[MAX_TEXT];
     char         plan[MAX_STEPS][MAX_TEXT];
     int          plan_idx;
+    int          plan_count;
     int          retry_cnt;
     bool         is_approved;
     RuntimeState state;
@@ -121,6 +122,36 @@ static void logger(LogLevel level, const char *fmt, ...) {
             va_start(args, fmt); vfprintf(f, fmt, args); fprintf(f, "\n");
             va_end(args); fclose(f);
         }
+    }
+}
+
+/* --- BABYAGI TASK PLANNER --- */
+static void build_task_queue(AgentRuntime *rt) {
+    if (!rt) return;
+    rt->plan_count = 0;
+
+    char temp[MAX_TEXT];
+    strncpy(temp, rt->objective, MAX_TEXT - 1);
+    temp[MAX_TEXT - 1] = '\0';
+
+    char *saveptr;
+    // Simple delimiter-based task splitting using "&&" or "&"
+    char *token = strtok_r(temp, "&", &saveptr);
+    while (token != NULL && rt->plan_count < MAX_STEPS) {
+        // Trim leading spaces
+        while(isspace((unsigned char)*token)) token++;
+        if (strlen(token) > 0) {
+            strncpy(rt->plan[rt->plan_count], token, MAX_TEXT - 1);
+            rt->plan[rt->plan_count][MAX_TEXT - 1] = '\0';
+            rt->plan_count++;
+        }
+        token = strtok_r(NULL, "&", &saveptr);
+    }
+
+    if (rt->plan_count == 0) {
+        strncpy(rt->plan[0], rt->objective, MAX_TEXT - 1);
+        rt->plan[0][MAX_TEXT - 1] = '\0';
+        rt->plan_count = 1;
     }
 }
 
@@ -193,56 +224,103 @@ static Decision dispatch_shell(AgentRuntime *rt, const char *binary, const char 
     return DEC_COMPLETE;
 }
 
+/* --- REACT OBSERVATION ENGINE --- */
+static Decision observe_result(AgentRuntime *rt) {
+    if (!rt || strlen(rt->result) == 0) return DEC_RETRY;
+
+    char norm_res[MAX_TEXT];
+    normalize(rt->result, norm_res);
+
+    // Check for semantic failure indicators in output
+    if (strstr(norm_res, "error") ||
+        strstr(norm_res, "failed") ||
+        strstr(norm_res, "not found") ||
+        strstr(norm_res, "denied") ||
+        strstr(norm_res, "exception")) {
+        logger(LOG_WARN, "Observation: Detected semantic failure in output");
+        return DEC_RETRY;
+    }
+
+    return DEC_COMPLETE;
+}
+
 /* --- PRODUCTION WORKFLOW --- */
 static void run_agent(AgentRuntime *rt) {
     if (!rt) return;
-    logger(LOG_INFO, "Initializing BOS-OMEGA Production Runtime v%s", VERSION);
+    logger(LOG_INFO, "Initializing BOS-OMEGA Agentic Workflow v%s", VERSION);
 
-    char norm_obj[MAX_TEXT];
-    normalize(rt->objective, norm_obj);
+    // 1. Planning Phase (BabyAGI style)
+    rt->state = ST_PARSE;
+    build_task_queue(rt);
+    logger(LOG_INFO, "Planner: Decomposed objective into %d sub-tasks.", rt->plan_count);
 
-    rt->state = ST_ROUTE; rt->tool = resolve_tool(norm_obj);
-    rt->risk = assess_risk(norm_obj);
-    logger(LOG_AUDIT, "Task: %s | Tool: %d | Risk: %d", rt->objective, rt->tool, rt->risk);
+    // 2. Execution Loop
+    for (rt->plan_idx = 0; rt->plan_idx < rt->plan_count; rt->plan_idx++) {
+        const char *current_task = rt->plan[rt->plan_idx];
+        logger(LOG_INFO, "--- Executing Task %d/%d: %s ---", rt->plan_idx + 1, rt->plan_count, current_task);
 
-    if (rt->risk >= R_DESTRUCTIVE && !rt->is_approved) {
-        rt->state = ST_ESCALATE; rt->decision = DEC_ESCALATE;
-        logger(LOG_WARN, "Policy Block: Destructive action requires --approve");
-        return;
-    }
+        char norm_task[MAX_TEXT];
+        normalize(current_task, norm_task);
 
-    for (rt->retry_cnt = 0; rt->retry_cnt < MAX_RETRIES; rt->retry_cnt++) {
-        rt->state = ST_EXEC; logger(LOG_INFO, "Execution Attempt %d/%d", rt->retry_cnt + 1, MAX_RETRIES);
-        Decision res;
-        if (rt->tool == T_PWSH) res = dispatch_shell(rt, "pwsh", "-Command");
-        else if (rt->tool == T_ADB) res = dispatch_shell(rt, "adb", "shell");
-        else {
-            ToolSpec *ts = &REGISTRY[rt->tool];
-            const char *key = getenv(ts->env_key);
-            if (!key && ts->type != T_CDP) { strcpy(rt->error_msg, "MISSING_API_KEY"); res = DEC_BLOCKED; }
+        rt->state = ST_ROUTE;
+        rt->tool = resolve_tool(norm_task);
+        rt->risk = assess_risk(norm_task);
+        logger(LOG_AUDIT, "Task: %s | Tool: %d | Risk: %d", current_task, rt->tool, rt->risk);
+
+        if (rt->risk >= R_DESTRUCTIVE && !rt->is_approved) {
+            rt->state = ST_ESCALATE; rt->decision = DEC_ESCALATE;
+            logger(LOG_WARN, "Policy Block: Destructive action requires --approve");
+            return; // Halt entire pipeline
+        }
+
+        bool task_success = false;
+        // 3. ReAct Loop (Reasoning & Acting)
+        for (rt->retry_cnt = 0; rt->retry_cnt < MAX_RETRIES; rt->retry_cnt++) {
+            rt->state = ST_EXEC;
+            logger(LOG_INFO, "Execution Attempt %d/%d", rt->retry_cnt + 1, MAX_RETRIES);
+
+            Decision res;
+            // Execute Action
+            if (rt->tool == T_PWSH) res = dispatch_shell(rt, "pwsh", "-Command");
+            else if (rt->tool == T_ADB) res = dispatch_shell(rt, "adb", "shell");
             else {
-                char payload[MAX_TEXT + 128];
-                snprintf(payload, sizeof(payload), "{\"model\":\"prod\",\"input\":\"%.*s\"}", (int)(MAX_TEXT - 1), rt->objective);
-                res = dispatch_http(rt, ts->url, key ? key : "NONE", payload);
+                ToolSpec *ts = &REGISTRY[rt->tool];
+                const char *key = getenv(ts->env_key);
+                if (!key && ts->type != T_CDP) { strcpy(rt->error_msg, "MISSING_API_KEY"); res = DEC_BLOCKED; }
+                else {
+                    char payload[MAX_TEXT + 128];
+                    snprintf(payload, sizeof(payload), "{\"model\":\"prod\",\"input\":\"%.*s\"}", (int)(MAX_TEXT - 1), current_task);
+                    res = dispatch_http(rt, ts->url, key ? key : "NONE", payload);
+                }
             }
+
+            // Observe Results
+            if (res == DEC_COMPLETE) {
+                rt->state = ST_VERIFY;
+                res = observe_result(rt);
+            }
+
+            if (res == DEC_COMPLETE) {
+                task_success = true;
+                logger(LOG_INFO, "Observation: Task successful.");
+                break;
+            } else if (res == DEC_BLOCKED) {
+                rt->state = ST_FAILURE; rt->decision = DEC_BLOCKED;
+                logger(LOG_ERROR, "Execution Blocked: %s", rt->error_msg);
+                break;
+            }
+            logger(LOG_WARN, "Observation: Attempt Failed (System Error: %s). Retrying...", rt->error_msg);
         }
 
-        if (res == DEC_COMPLETE) {
-            rt->state = ST_SUCCESS; rt->decision = DEC_COMPLETE;
-            logger(LOG_INFO, "Task Completed Successfully");
-            break;
-        } else if (res == DEC_BLOCKED) {
-            rt->state = ST_FAILURE; rt->decision = DEC_BLOCKED;
-            logger(LOG_ERROR, "Execution Blocked: %s", rt->error_msg);
-            break;
+        if (!task_success) {
+            rt->state = ST_FAILURE; rt->decision = DEC_ABORT;
+            logger(LOG_ERROR, "Final State: FAILURE | Pipeline aborted at task %d", rt->plan_idx + 1);
+            return;
         }
-        logger(LOG_WARN, "Attempt Failed: %s. Retrying...", rt->error_msg);
     }
 
-    if (rt->state != ST_SUCCESS) {
-        rt->state = ST_FAILURE; rt->decision = DEC_ABORT;
-        logger(LOG_ERROR, "Final State: FAILURE | Reason: %s", rt->error_msg);
-    }
+    rt->state = ST_SUCCESS; rt->decision = DEC_COMPLETE;
+    logger(LOG_INFO, "Workflow Completed Successfully.");
 }
 
 /* --- LANGUAGE DECISION ENGINE --- */
