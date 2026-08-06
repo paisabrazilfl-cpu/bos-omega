@@ -24,6 +24,7 @@
 #include <time.h>
 #include <errno.h>
 #include <stdarg.h>
+#include <ctype.h>
 #include <curl/curl.h>
 
 /* --- SYSTEM CONSTANTS --- */
@@ -108,7 +109,6 @@ static ToolSpec REGISTRY[] = {
     { T_PWSH,    "POWERSHELL", "PWSH_PATH",       "local", true },
     { T_ADB,     "ANDROID_ADB","ADB_PATH",        "local", true }
 };
-static const int REG_SIZE = sizeof(REGISTRY) / sizeof(REGISTRY[0]);
 
 /* --- CORE UTILITIES --- */
 static void logger(LogLevel level, const char *fmt, ...) {
@@ -125,26 +125,48 @@ static void logger(LogLevel level, const char *fmt, ...) {
     }
 }
 
-static bool str_has(const char *haystack, const char *needle) {
-    return haystack && needle && strcasestr(haystack, needle) != NULL;
+/**
+ * Normalizes input string by converting it to lowercase.
+ * This converts a multi-match keyword search from O(N * M) complex strcasestr()
+ * calls down to a single O(N) lowercase normalization pass followed by fast O(M) strstr() calls.
+ */
+static void normalize(const char *src, char *dest) {
+    if (!src || !dest) return;
+    int i = 0;
+    while (src[i] != '\0' && i < MAX_TEXT - 1) {
+        dest[i] = (char)tolower((unsigned char)src[i]);
+        i++;
+    }
+    dest[i] = '\0';
+}
+
+/**
+ * Checks if a normalized haystack string contains the given keyword.
+ * This helper uses the fast, exact match strstr() on the pre-lowercased buffer.
+ */
+static bool has_word(const char *normalized_haystack, const char *keyword) {
+    if (!normalized_haystack || !keyword) return false;
+    return strstr(normalized_haystack, keyword) != NULL;
 }
 
 /* --- GOVERNANCE ENGINE --- */
-static RiskLevel assess_risk(const char *task) {
-    if (str_has(task, "buy") || str_has(task, "pay") || str_has(task, "spend")) return R_FINANCIAL;
-    if (str_has(task, "delete") || str_has(task, "uninstall") || str_has(task, "rm ") || str_has(task, "wipe") || str_has(task, "Remove-") || str_has(task, "Set-Content")) return R_DESTRUCTIVE;
-    if (str_has(task, "push") || str_has(task, "commit") || str_has(task, "api")) return R_EXTERNAL_API;
-    if (str_has(task, "write") || str_has(task, "create") || str_has(task, "save")) return R_LOCAL_WRITE;
+static RiskLevel assess_risk(const char *norm) {
+    if (!norm) return R_READ_ONLY;
+    if (has_word(norm, "buy") || has_word(norm, "pay") || has_word(norm, "spend")) return R_FINANCIAL;
+    if (has_word(norm, "delete") || has_word(norm, "uninstall") || has_word(norm, "rm ") || has_word(norm, "wipe") || has_word(norm, "remove-") || has_word(norm, "set-content")) return R_DESTRUCTIVE;
+    if (has_word(norm, "push") || has_word(norm, "commit") || has_word(norm, "api")) return R_EXTERNAL_API;
+    if (has_word(norm, "write") || has_word(norm, "create") || has_word(norm, "save")) return R_LOCAL_WRITE;
     return R_READ_ONLY;
 }
 
-static ToolType resolve_tool(const char *task) {
-    if (str_has(task, "android") || str_has(task, "adb") || str_has(task, "pm ") || str_has(task, "am ") || str_has(task, "input ")) return T_ADB;
-    if (str_has(task, "Get-") || str_has(task, "Set-") || str_has(task, "pwsh") || str_has(task, "powershell")) return T_PWSH;
-    if (str_has(task, "browser") || str_has(task, "navigate") || str_has(task, "click")) return T_CDP;
-    if (str_has(task, "image") || str_has(task, "visual")) return T_NVIDIA;
-    if (str_has(task, "railway") || str_has(task, "deploy")) return T_RAILWAY;
-    if (str_has(task, "github") || str_has(task, "repo")) return T_GITHUB;
+static ToolType resolve_tool(const char *norm) {
+    if (!norm) return T_NONE;
+    if (has_word(norm, "android") || has_word(norm, "adb") || has_word(norm, "pm ") || has_word(norm, "am ") || has_word(norm, "input ")) return T_ADB;
+    if (has_word(norm, "get-") || has_word(norm, "set-") || has_word(norm, "pwsh") || has_word(norm, "powershell")) return T_PWSH;
+    if (has_word(norm, "browser") || has_word(norm, "navigate") || has_word(norm, "click")) return T_CDP;
+    if (has_word(norm, "image") || has_word(norm, "visual")) return T_NVIDIA;
+    if (has_word(norm, "railway") || has_word(norm, "deploy")) return T_RAILWAY;
+    if (has_word(norm, "github") || has_word(norm, "repo")) return T_GITHUB;
     return T_MISTRAL;
 }
 
@@ -157,6 +179,7 @@ static size_t net_write_cb(void *ptr, size_t size, size_t nmemb, void *userdata)
 }
 
 static Decision dispatch_http(AgentRuntime *rt, const char *url, const char *key, const char *payload) {
+    if (!rt) return DEC_ABORT;
     CURL *curl = curl_easy_init(); if (!curl) { strcpy(rt->error_msg, "CURL_INIT_FAIL"); return DEC_RETRY; }
     NetBuffer buffer = {0}; char auth[MAX_TEXT]; snprintf(auth, sizeof(auth), "Authorization: Bearer %s", key);
     struct curl_slist *headers = curl_slist_append(NULL, "Content-Type: application/json");
@@ -173,6 +196,7 @@ static Decision dispatch_http(AgentRuntime *rt, const char *url, const char *key
 
 /* --- AUTOMATION ENGINES --- */
 static Decision dispatch_shell(AgentRuntime *rt, const char *binary, const char *args) {
+    if (!rt) return DEC_ABORT;
     char cmd[MAX_TEXT + 128]; snprintf(cmd, sizeof(cmd), "%s %s \"%s\" 2>&1", binary, args, rt->objective);
     logger(LOG_INFO, "Executing: %s", cmd);
     FILE *fp = popen(cmd, "r"); if (!fp) { snprintf(rt->error_msg, MAX_TEXT, "POPEN_FAIL: %s", strerror(errno)); return DEC_RETRY; }
@@ -184,9 +208,13 @@ static Decision dispatch_shell(AgentRuntime *rt, const char *binary, const char 
 
 /* --- PRODUCTION WORKFLOW --- */
 static void run_agent(AgentRuntime *rt) {
+    if (!rt) return;
     logger(LOG_INFO, "Initializing BOS-OMEGA Production Runtime v%s", VERSION);
-    rt->state = ST_ROUTE; rt->tool = resolve_tool(rt->objective);
-    rt->risk = assess_risk(rt->objective);
+    char norm[MAX_TEXT];
+    normalize(rt->objective, norm);
+
+    rt->state = ST_ROUTE; rt->tool = resolve_tool(norm);
+    rt->risk = assess_risk(norm);
     logger(LOG_AUDIT, "Task: %s | Tool: %d | Risk: %d", rt->objective, rt->tool, rt->risk);
 
     if (rt->risk >= R_DESTRUCTIVE && !rt->is_approved) {
@@ -205,7 +233,8 @@ static void run_agent(AgentRuntime *rt) {
             const char *key = getenv(ts->env_key);
             if (!key && ts->type != T_CDP) { strcpy(rt->error_msg, "MISSING_API_KEY"); res = DEC_BLOCKED; }
             else {
-                char payload[MAX_TEXT]; snprintf(payload, sizeof(payload), "{\"model\":\"prod\",\"input\":\"%s\"}", rt->objective);
+                char payload[MAX_TEXT + 128];
+                snprintf(payload, sizeof(payload), "{\"model\":\"prod\",\"input\":\"%.*s\"}", MAX_TEXT, rt->objective);
                 res = dispatch_http(rt, ts->url, key ? key : "NONE", payload);
             }
         }
@@ -230,15 +259,19 @@ static void run_agent(AgentRuntime *rt) {
 
 /* --- LANGUAGE DECISION ENGINE --- */
 static void run_lang(LangInput *in) {
-    LangOutput out = {0}; strcpy(out.goal, in->goal);
-    if (str_has(in->goal, "AI") || str_has(in->goal, "agent")) {
-        strcpy(out.lang, "C / Python / TypeScript");
-        strcpy(out.why, "C for core performance, Python for ML, TS for interface.");
-        strcpy(out.stack, "BOS-OMEGA Core + FastAPI + Next.js");
+    if (!in) return;
+    LangOutput out = {0}; strncpy(out.goal, in->goal, MAX_TEXT - 1); out.goal[MAX_TEXT - 1] = '\0';
+    char norm[MAX_TEXT];
+    normalize(in->goal, norm);
+
+    if (has_word(norm, "ai") || has_word(norm, "agent")) {
+        strncpy(out.lang, "C / Python / TypeScript", MAX_TEXT - 1); out.lang[MAX_TEXT - 1] = '\0';
+        strncpy(out.why, "C for core performance, Python for ML, TS for interface.", MAX_TEXT - 1); out.why[MAX_TEXT - 1] = '\0';
+        strncpy(out.stack, "BOS-OMEGA Core + FastAPI + Next.js", MAX_TEXT - 1); out.stack[MAX_TEXT - 1] = '\0';
     } else {
-        strcpy(out.lang, "TypeScript / Rust");
-        strcpy(out.why, "Modern safety and scalability.");
-        strcpy(out.stack, "Node.js + PostgreSQL + Docker");
+        strncpy(out.lang, "TypeScript / Rust", MAX_TEXT - 1); out.lang[MAX_TEXT - 1] = '\0';
+        strncpy(out.why, "Modern safety and scalability.", MAX_TEXT - 1); out.why[MAX_TEXT - 1] = '\0';
+        strncpy(out.stack, "Node.js + PostgreSQL + Docker", MAX_TEXT - 1); out.stack[MAX_TEXT - 1] = '\0';
     }
     printf("\n--- PRODUCTION LANGUAGE RECOMMENDATION ---\n");
     printf("Detected Goal: %s\nPrimary Language: %s\nReasoning: %s\nFull Stack: %s\n", out.goal, out.lang, out.why, out.stack);
