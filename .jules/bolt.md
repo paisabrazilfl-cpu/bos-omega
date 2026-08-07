@@ -1,0 +1,3 @@
+## 2026-05-18 - Case-insensitive string search optimization via pre-normalization
+**Learning:** Case-insensitive string searching in C via `strcasestr` is significantly slower than exact matching with `strstr` because it performs character conversion during every comparison. Pre-normalizing haystacks once per scope is a high-impact optimization for multi-match scenarios, reducing time complexity from O(N*M) to O(N+M).
+**Action:** Always pre-normalize Haystack strings to lowercase using a secure, standard-compliant `normalize` function that performs NULL and bounds checks, and converts characters via standard `tolower((unsigned char))` cast prior to performing multiple keyword searches.
