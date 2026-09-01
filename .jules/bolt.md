@@ -1,0 +1,3 @@
+## 2026-05-18 - Single-pass string normalization for multi-keyword search
+**Learning:** In C applications performing repeated case-insensitive keyword searches on the same task objective string, calling `strcasestr` multiple times incurs repeated character lowercasing comparisons per keyword scan. Pre-normalizing the string into a lowercased stack buffer once per function scope enables using faster direct `strstr` searches across all subsequent keyword checks.
+**Action:** Always pre-normalize lowercased input buffers once when evaluating multiple case-insensitive keyword rules in performance-critical C routines.
