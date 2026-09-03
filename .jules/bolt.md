@@ -1,0 +1,3 @@
+## 2025-05-18 - Single-Pass String Lowercasing Optimization for Multi-Keyword Matches
+**Learning:** `strcasestr()` performs character conversion for every single comparison during substring matching. When evaluating multiple keyword rules sequentially against the same task text in governance (`assess_risk`) and tool resolution (`resolve_tool`), using `strcasestr()` results in an O(N*M) performance penalty per rule. Pre-normalizing the haystack string once into a stack buffer reduces the overall matching cost from O(N*M) to O(N) single-pass normalization plus O(M) fast `strstr()` matches.
+**Action:** When scanning strings for multiple keywords in C, always normalize the target string once per scope rather than using repeated `strcasestr()` calls.
