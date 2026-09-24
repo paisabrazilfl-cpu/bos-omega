@@ -108,7 +108,7 @@ static ToolSpec REGISTRY[] = {
     { T_PWSH,    "POWERSHELL", "PWSH_PATH",       "local", true },
     { T_ADB,     "ANDROID_ADB","ADB_PATH",        "local", true }
 };
-static const int REG_SIZE = sizeof(REGISTRY) / sizeof(REGISTRY[0]);
+static const int REG_SIZE __attribute__((unused)) = sizeof(REGISTRY) / sizeof(REGISTRY[0]);
 
 /* --- CORE UTILITIES --- */
 static void logger(LogLevel level, const char *fmt, ...) {
@@ -167,7 +167,9 @@ static Decision dispatch_http(AgentRuntime *rt, const char *url, const char *key
     CURLcode res = curl_easy_perform(curl); long http_code = 0; curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
     curl_slist_free_all(headers); curl_easy_cleanup(curl);
     if (res != CURLE_OK) { snprintf(rt->error_msg, MAX_TEXT, "CURL_ERR: %s", curl_easy_strerror(res)); return DEC_RETRY; }
-    strncpy(rt->result, buffer.data, MAX_TEXT - 1);
+    size_t copy_len = buffer.size < MAX_TEXT - 1 ? buffer.size : MAX_TEXT - 1;
+    memcpy(rt->result, buffer.data, copy_len);
+    rt->result[copy_len] = '\0';
     return (http_code >= 200 && http_code < 300) ? DEC_COMPLETE : DEC_RETRY;
 }
 
@@ -205,7 +207,9 @@ static void run_agent(AgentRuntime *rt) {
             const char *key = getenv(ts->env_key);
             if (!key && ts->type != T_CDP) { strcpy(rt->error_msg, "MISSING_API_KEY"); res = DEC_BLOCKED; }
             else {
-                char payload[MAX_TEXT]; snprintf(payload, sizeof(payload), "{\"model\":\"prod\",\"input\":\"%s\"}", rt->objective);
+                /* Performance & Safety: Use MAX_TEXT + 128 buffer and explicit string precision to prevent compiler truncation warnings */
+                char payload[MAX_TEXT + 128];
+                snprintf(payload, sizeof(payload), "{\"model\":\"prod\",\"input\":\"%.*s\"}", MAX_TEXT - 1, rt->objective);
                 res = dispatch_http(rt, ts->url, key ? key : "NONE", payload);
             }
         }
@@ -252,18 +256,19 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    curl_global_init(CURL_GLOBAL_ALL);
     if (strcmp(argv[1], "run") == 0 && argc >= 3) {
+        /* Performance Optimization: Defer libcurl global initialization to the HTTP execution branch */
+        curl_global_init(CURL_GLOBAL_ALL);
         AgentRuntime rt = {0}; strncpy(rt.objective, argv[2], MAX_TEXT - 1);
         for (int i = 3; i < argc; i++) if (strcmp(argv[i], "--approve") == 0) rt.is_approved = true;
         run_agent(&rt);
         printf("\n--- EXECUTION RESULT ---\n%.1000s\n", rt.result);
+        curl_global_cleanup();
     } else if (strcmp(argv[1], "lang") == 0 && argc >= 3) {
         LangInput in = {0}; strncpy(in.goal, argv[2], MAX_TEXT - 1);
         run_lang(&in);
     } else {
         printf("Error: Invalid arguments.\n");
     }
-    curl_global_cleanup();
     return 0;
 }
