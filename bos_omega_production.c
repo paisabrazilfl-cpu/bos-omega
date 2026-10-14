@@ -108,7 +108,6 @@ static ToolSpec REGISTRY[] = {
     { T_PWSH,    "POWERSHELL", "PWSH_PATH",       "local", true },
     { T_ADB,     "ANDROID_ADB","ADB_PATH",        "local", true }
 };
-static const int REG_SIZE = sizeof(REGISTRY) / sizeof(REGISTRY[0]);
 
 /* --- CORE UTILITIES --- */
 static void logger(LogLevel level, const char *fmt, ...) {
@@ -184,6 +183,7 @@ static Decision dispatch_shell(AgentRuntime *rt, const char *binary, const char 
 
 /* --- PRODUCTION WORKFLOW --- */
 static void run_agent(AgentRuntime *rt) {
+    curl_global_init(CURL_GLOBAL_ALL);
     logger(LOG_INFO, "Initializing BOS-OMEGA Production Runtime v%s", VERSION);
     rt->state = ST_ROUTE; rt->tool = resolve_tool(rt->objective);
     rt->risk = assess_risk(rt->objective);
@@ -205,7 +205,8 @@ static void run_agent(AgentRuntime *rt) {
             const char *key = getenv(ts->env_key);
             if (!key && ts->type != T_CDP) { strcpy(rt->error_msg, "MISSING_API_KEY"); res = DEC_BLOCKED; }
             else {
-                char payload[MAX_TEXT]; snprintf(payload, sizeof(payload), "{\"model\":\"prod\",\"input\":\"%s\"}", rt->objective);
+                char payload[MAX_TEXT + 128];
+                snprintf(payload, sizeof(payload), "{\"model\":\"prod\",\"input\":\"%.*s\"}", MAX_TEXT - 1, rt->objective);
                 res = dispatch_http(rt, ts->url, key ? key : "NONE", payload);
             }
         }
@@ -226,6 +227,7 @@ static void run_agent(AgentRuntime *rt) {
         rt->state = ST_FAILURE; rt->decision = DEC_ABORT;
         logger(LOG_ERROR, "Final State: FAILURE | Reason: %s", rt->error_msg);
     }
+    curl_global_cleanup();
 }
 
 /* --- LANGUAGE DECISION ENGINE --- */
@@ -252,7 +254,6 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    curl_global_init(CURL_GLOBAL_ALL);
     if (strcmp(argv[1], "run") == 0 && argc >= 3) {
         AgentRuntime rt = {0}; strncpy(rt.objective, argv[2], MAX_TEXT - 1);
         for (int i = 3; i < argc; i++) if (strcmp(argv[i], "--approve") == 0) rt.is_approved = true;
@@ -264,6 +265,5 @@ int main(int argc, char **argv) {
     } else {
         printf("Error: Invalid arguments.\n");
     }
-    curl_global_cleanup();
     return 0;
 }
