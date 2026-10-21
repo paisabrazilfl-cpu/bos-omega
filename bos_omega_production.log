@@ -1,0 +1,3 @@
+1792595267 [AUDIT] Task: adb shell ls | Tool: 8 | Risk: 0
+1792595267 [ERROR] Final State: FAILURE | Reason: SHELL_EXIT_256
+1792595278 [AUDIT] Task: rm -rf / | Tool: 0 | Risk: 3
