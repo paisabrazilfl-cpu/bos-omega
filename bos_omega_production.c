@@ -24,6 +24,7 @@
 #include <time.h>
 #include <errno.h>
 #include <stdarg.h>
+#include <ctype.h>
 #include <curl/curl.h>
 
 /* --- SYSTEM CONSTANTS --- */
@@ -108,7 +109,6 @@ static ToolSpec REGISTRY[] = {
     { T_PWSH,    "POWERSHELL", "PWSH_PATH",       "local", true },
     { T_ADB,     "ANDROID_ADB","ADB_PATH",        "local", true }
 };
-static const int REG_SIZE = sizeof(REGISTRY) / sizeof(REGISTRY[0]);
 
 /* --- CORE UTILITIES --- */
 static void logger(LogLevel level, const char *fmt, ...) {
@@ -125,26 +125,49 @@ static void logger(LogLevel level, const char *fmt, ...) {
     }
 }
 
-static bool str_has(const char *haystack, const char *needle) {
-    return haystack && needle && strcasestr(haystack, needle) != NULL;
+/*
+ * OPTIMIZATION (Bolt ⚡):
+ * Normalizes input string to lowercase in a single O(N) pass.
+ * Replaces repeated strcasestr() scanning with fast strstr() exact matches,
+ * reducing overall search complexity from O(N*M) to O(N + M).
+ */
+static void normalize(const char *src, char *dest, size_t max_len) {
+    if (!src) { dest[0] = '\0'; return; }
+    size_t i = 0;
+    for (; src[i] != '\0' && i < max_len - 1; i++) {
+        dest[i] = (char)tolower((unsigned char)src[i]);
+    }
+    dest[i] = '\0';
+}
+
+static bool str_has_fast(const char *norm_haystack, const char *lower_needle) {
+    return norm_haystack && lower_needle && strstr(norm_haystack, lower_needle) != NULL;
 }
 
 /* --- GOVERNANCE ENGINE --- */
 static RiskLevel assess_risk(const char *task) {
-    if (str_has(task, "buy") || str_has(task, "pay") || str_has(task, "spend")) return R_FINANCIAL;
-    if (str_has(task, "delete") || str_has(task, "uninstall") || str_has(task, "rm ") || str_has(task, "wipe") || str_has(task, "Remove-") || str_has(task, "Set-Content")) return R_DESTRUCTIVE;
-    if (str_has(task, "push") || str_has(task, "commit") || str_has(task, "api")) return R_EXTERNAL_API;
-    if (str_has(task, "write") || str_has(task, "create") || str_has(task, "save")) return R_LOCAL_WRITE;
+    if (!task) return R_READ_ONLY;
+    char norm[MAX_TEXT];
+    normalize(task, norm, sizeof(norm));
+
+    if (str_has_fast(norm, "buy") || str_has_fast(norm, "pay") || str_has_fast(norm, "spend")) return R_FINANCIAL;
+    if (str_has_fast(norm, "delete") || str_has_fast(norm, "uninstall") || str_has_fast(norm, "rm ") || str_has_fast(norm, "wipe") || str_has_fast(norm, "remove-") || str_has_fast(norm, "set-content")) return R_DESTRUCTIVE;
+    if (str_has_fast(norm, "push") || str_has_fast(norm, "commit") || str_has_fast(norm, "api")) return R_EXTERNAL_API;
+    if (str_has_fast(norm, "write") || str_has_fast(norm, "create") || str_has_fast(norm, "save")) return R_LOCAL_WRITE;
     return R_READ_ONLY;
 }
 
 static ToolType resolve_tool(const char *task) {
-    if (str_has(task, "android") || str_has(task, "adb") || str_has(task, "pm ") || str_has(task, "am ") || str_has(task, "input ")) return T_ADB;
-    if (str_has(task, "Get-") || str_has(task, "Set-") || str_has(task, "pwsh") || str_has(task, "powershell")) return T_PWSH;
-    if (str_has(task, "browser") || str_has(task, "navigate") || str_has(task, "click")) return T_CDP;
-    if (str_has(task, "image") || str_has(task, "visual")) return T_NVIDIA;
-    if (str_has(task, "railway") || str_has(task, "deploy")) return T_RAILWAY;
-    if (str_has(task, "github") || str_has(task, "repo")) return T_GITHUB;
+    if (!task) return T_MISTRAL;
+    char norm[MAX_TEXT];
+    normalize(task, norm, sizeof(norm));
+
+    if (str_has_fast(norm, "android") || str_has_fast(norm, "adb") || str_has_fast(norm, "pm ") || str_has_fast(norm, "am ") || str_has_fast(norm, "input ")) return T_ADB;
+    if (str_has_fast(norm, "get-") || str_has_fast(norm, "set-") || str_has_fast(norm, "pwsh") || str_has_fast(norm, "powershell")) return T_PWSH;
+    if (str_has_fast(norm, "browser") || str_has_fast(norm, "navigate") || str_has_fast(norm, "click")) return T_CDP;
+    if (str_has_fast(norm, "image") || str_has_fast(norm, "visual")) return T_NVIDIA;
+    if (str_has_fast(norm, "railway") || str_has_fast(norm, "deploy")) return T_RAILWAY;
+    if (str_has_fast(norm, "github") || str_has_fast(norm, "repo")) return T_GITHUB;
     return T_MISTRAL;
 }
 
@@ -167,7 +190,9 @@ static Decision dispatch_http(AgentRuntime *rt, const char *url, const char *key
     CURLcode res = curl_easy_perform(curl); long http_code = 0; curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
     curl_slist_free_all(headers); curl_easy_cleanup(curl);
     if (res != CURLE_OK) { snprintf(rt->error_msg, MAX_TEXT, "CURL_ERR: %s", curl_easy_strerror(res)); return DEC_RETRY; }
-    strncpy(rt->result, buffer.data, MAX_TEXT - 1);
+    size_t copy_len = buffer.size < (MAX_TEXT - 1) ? buffer.size : (MAX_TEXT - 1);
+    memcpy(rt->result, buffer.data, copy_len);
+    rt->result[copy_len] = '\0';
     return (http_code >= 200 && http_code < 300) ? DEC_COMPLETE : DEC_RETRY;
 }
 
@@ -205,7 +230,7 @@ static void run_agent(AgentRuntime *rt) {
             const char *key = getenv(ts->env_key);
             if (!key && ts->type != T_CDP) { strcpy(rt->error_msg, "MISSING_API_KEY"); res = DEC_BLOCKED; }
             else {
-                char payload[MAX_TEXT]; snprintf(payload, sizeof(payload), "{\"model\":\"prod\",\"input\":\"%s\"}", rt->objective);
+                char payload[MAX_TEXT + 128]; snprintf(payload, sizeof(payload), "{\"model\":\"prod\",\"input\":\"%.*s\"}", MAX_TEXT - 1, rt->objective);
                 res = dispatch_http(rt, ts->url, key ? key : "NONE", payload);
             }
         }
@@ -231,7 +256,10 @@ static void run_agent(AgentRuntime *rt) {
 /* --- LANGUAGE DECISION ENGINE --- */
 static void run_lang(LangInput *in) {
     LangOutput out = {0}; strcpy(out.goal, in->goal);
-    if (str_has(in->goal, "AI") || str_has(in->goal, "agent")) {
+    char norm[MAX_TEXT];
+    normalize(in->goal, norm, sizeof(norm));
+
+    if (str_has_fast(norm, "ai") || str_has_fast(norm, "agent")) {
         strcpy(out.lang, "C / Python / TypeScript");
         strcpy(out.why, "C for core performance, Python for ML, TS for interface.");
         strcpy(out.stack, "BOS-OMEGA Core + FastAPI + Next.js");
