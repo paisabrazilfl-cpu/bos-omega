@@ -24,6 +24,7 @@
 #include <time.h>
 #include <errno.h>
 #include <stdarg.h>
+#include <ctype.h>
 #include <curl/curl.h>
 
 /* --- SYSTEM CONSTANTS --- */
@@ -125,26 +126,40 @@ static void logger(LogLevel level, const char *fmt, ...) {
     }
 }
 
-static bool str_has(const char *haystack, const char *needle) {
-    return haystack && needle && strcasestr(haystack, needle) != NULL;
+/* Converts src into lowercase dest buffer in a single O(N) pass to avoid expensive repeated strcasestr comparisons. */
+static void normalize(const char *src, char *dest) {
+    if (!src) { dest[0] = '\0'; return; }
+    size_t i = 0;
+    for (; src[i] != '\0' && i < MAX_TEXT - 1; i++) {
+        dest[i] = (char)tolower((unsigned char)src[i]);
+    }
+    dest[i] = '\0';
+}
+
+static bool str_has(const char *haystack, const char *lower_needle) {
+    return haystack && lower_needle && strstr(haystack, lower_needle) != NULL;
 }
 
 /* --- GOVERNANCE ENGINE --- */
 static RiskLevel assess_risk(const char *task) {
-    if (str_has(task, "buy") || str_has(task, "pay") || str_has(task, "spend")) return R_FINANCIAL;
-    if (str_has(task, "delete") || str_has(task, "uninstall") || str_has(task, "rm ") || str_has(task, "wipe") || str_has(task, "Remove-") || str_has(task, "Set-Content")) return R_DESTRUCTIVE;
-    if (str_has(task, "push") || str_has(task, "commit") || str_has(task, "api")) return R_EXTERNAL_API;
-    if (str_has(task, "write") || str_has(task, "create") || str_has(task, "save")) return R_LOCAL_WRITE;
+    char norm[MAX_TEXT];
+    normalize(task, norm);
+    if (str_has(norm, "buy") || str_has(norm, "pay") || str_has(norm, "spend")) return R_FINANCIAL;
+    if (str_has(norm, "delete") || str_has(norm, "uninstall") || str_has(norm, "rm ") || str_has(norm, "wipe") || str_has(norm, "remove-") || str_has(norm, "set-content")) return R_DESTRUCTIVE;
+    if (str_has(norm, "push") || str_has(norm, "commit") || str_has(norm, "api")) return R_EXTERNAL_API;
+    if (str_has(norm, "write") || str_has(norm, "create") || str_has(norm, "save")) return R_LOCAL_WRITE;
     return R_READ_ONLY;
 }
 
 static ToolType resolve_tool(const char *task) {
-    if (str_has(task, "android") || str_has(task, "adb") || str_has(task, "pm ") || str_has(task, "am ") || str_has(task, "input ")) return T_ADB;
-    if (str_has(task, "Get-") || str_has(task, "Set-") || str_has(task, "pwsh") || str_has(task, "powershell")) return T_PWSH;
-    if (str_has(task, "browser") || str_has(task, "navigate") || str_has(task, "click")) return T_CDP;
-    if (str_has(task, "image") || str_has(task, "visual")) return T_NVIDIA;
-    if (str_has(task, "railway") || str_has(task, "deploy")) return T_RAILWAY;
-    if (str_has(task, "github") || str_has(task, "repo")) return T_GITHUB;
+    char norm[MAX_TEXT];
+    normalize(task, norm);
+    if (str_has(norm, "android") || str_has(norm, "adb") || str_has(norm, "pm ") || str_has(norm, "am ") || str_has(norm, "input ")) return T_ADB;
+    if (str_has(norm, "get-") || str_has(norm, "set-") || str_has(norm, "pwsh") || str_has(norm, "powershell")) return T_PWSH;
+    if (str_has(norm, "browser") || str_has(norm, "navigate") || str_has(norm, "click")) return T_CDP;
+    if (str_has(norm, "image") || str_has(norm, "visual")) return T_NVIDIA;
+    if (str_has(norm, "railway") || str_has(norm, "deploy")) return T_RAILWAY;
+    if (str_has(norm, "github") || str_has(norm, "repo")) return T_GITHUB;
     return T_MISTRAL;
 }
 
@@ -205,7 +220,7 @@ static void run_agent(AgentRuntime *rt) {
             const char *key = getenv(ts->env_key);
             if (!key && ts->type != T_CDP) { strcpy(rt->error_msg, "MISSING_API_KEY"); res = DEC_BLOCKED; }
             else {
-                char payload[MAX_TEXT]; snprintf(payload, sizeof(payload), "{\"model\":\"prod\",\"input\":\"%s\"}", rt->objective);
+                char payload[MAX_TEXT + 128]; snprintf(payload, sizeof(payload), "{\"model\":\"prod\",\"input\":\"%.*s\"}", MAX_TEXT - 1, rt->objective);
                 res = dispatch_http(rt, ts->url, key ? key : "NONE", payload);
             }
         }
@@ -231,7 +246,9 @@ static void run_agent(AgentRuntime *rt) {
 /* --- LANGUAGE DECISION ENGINE --- */
 static void run_lang(LangInput *in) {
     LangOutput out = {0}; strcpy(out.goal, in->goal);
-    if (str_has(in->goal, "AI") || str_has(in->goal, "agent")) {
+    char norm[MAX_TEXT];
+    normalize(in->goal, norm);
+    if (str_has(norm, "ai") || str_has(norm, "agent")) {
         strcpy(out.lang, "C / Python / TypeScript");
         strcpy(out.why, "C for core performance, Python for ML, TS for interface.");
         strcpy(out.stack, "BOS-OMEGA Core + FastAPI + Next.js");
