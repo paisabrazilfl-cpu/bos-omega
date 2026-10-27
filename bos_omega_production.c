@@ -67,16 +67,12 @@ typedef struct {
 
 typedef struct {
     ToolType    type;
-    const char *name;
     const char *env_key;
     const char *url;
-    bool        active;
 } ToolSpec;
 
 typedef struct {
     char         objective[MAX_TEXT];
-    char         plan[MAX_STEPS][MAX_TEXT];
-    int          plan_idx;
     int          retry_cnt;
     bool         is_approved;
     RuntimeState state;
@@ -85,28 +81,27 @@ typedef struct {
     RiskLevel    risk;
     char         result[MAX_TEXT];
     char         error_msg[MAX_TEXT];
-    char         audit_msg[MAX_TEXT];
 } AgentRuntime;
 
 typedef struct {
-    char goal[MAX_TEXT], skill[MAX_TEXT], type[MAX_TEXT], plat[MAX_TEXT], time[MAX_TEXT], style[MAX_TEXT], constraints[MAX_TEXT];
+    char goal[MAX_TEXT];
 } LangInput;
 
 typedef struct {
-    char goal[MAX_TEXT], lang[MAX_TEXT], why[MAX_TEXT], stack[MAX_TEXT], steps[MAX_TEXT];
+    char goal[MAX_TEXT], lang[MAX_TEXT], why[MAX_TEXT], stack[MAX_TEXT];
 } LangOutput;
 
 /* --- PRODUCTION TOOL REGISTRY --- */
 static ToolSpec REGISTRY[] = {
-    { T_MISTRAL, "MISTRAL_AI", "MISTRAL_API_KEY", "https://api.mistral.ai/v1/chat/completions", true },
-    { T_NVIDIA,  "NVIDIA_GPU", "NVIDIA_API_KEY",  "https://integrate.api.nvidia.com/v1/chat/completions", true },
-    { T_RERANKER,"RERANKER",   "RERANKER_KEY",    "https://api.rerank.local/v1", true },
-    { T_RAILWAY, "RAILWAY",    "RAILWAY_TOKEN",   "https://backboard.railway.app/graphql/v2", true },
-    { T_GITHUB,  "GITHUB",     "GITHUB_TOKEN",    "https://api.github.com", true },
-    { T_APIFY,   "APIFY",      "APIFY_TOKEN",     "https://api.apify.com/v2/acts", true },
-    { T_CDP,     "BROWSER",    "CDP_URL",         "http://localhost:9222/json", true },
-    { T_PWSH,    "POWERSHELL", "PWSH_PATH",       "local", true },
-    { T_ADB,     "ANDROID_ADB","ADB_PATH",        "local", true }
+    { T_MISTRAL, "MISTRAL_API_KEY", "https://api.mistral.ai/v1/chat/completions" },
+    { T_NVIDIA,  "NVIDIA_API_KEY",  "https://integrate.api.nvidia.com/v1/chat/completions" },
+    { T_RERANKER,"RERANKER_KEY",    "https://api.rerank.local/v1" },
+    { T_RAILWAY, "RAILWAY_PROJECT_TOKEN",   "https://backboard.railway.app/graphql/v2" },
+    { T_GITHUB,  "GITHUB_TOKEN",    "https://api.github.com" },
+    { T_APIFY,   "APIFY_TOKEN",     "https://api.apify.com/v2/acts" },
+    { T_CDP,     "CDP_URL",         "http://localhost:9222/json" },
+    { T_PWSH,    "PWSH_PATH",       "local" },
+    { T_ADB,     "ADB_PATH",        "local" }
 };
 static const int REG_SIZE = sizeof(REGISTRY) / sizeof(REGISTRY[0]);
 

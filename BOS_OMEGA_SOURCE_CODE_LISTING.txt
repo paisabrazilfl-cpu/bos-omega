@@ -127,7 +127,7 @@ Tool         | Type    | Environment Variable | Active
 Mistral      | LLM     | MISTRAL_API_KEY     | true
 NVIDIA       | GPU     | NVIDIA_API_KEY      | true
 Reranker     | ML      | RERANKER_KEY        | true
-Railway      | Deploy  | RAILWAY_TOKEN       | true
+Railway      | Deploy  | RAILWAY_PROJECT_TOKEN       | true
 GitHub       | VCS     | GITHUB_TOKEN        | true
 Apify        | Scrape  | APIFY_TOKEN         | true
 CDP          | Browser | CDP_ENDPOINT        | true
