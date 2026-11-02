@@ -252,18 +252,23 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    curl_global_init(CURL_GLOBAL_ALL);
     if (strcmp(argv[1], "run") == 0 && argc >= 3) {
+        /* Defer curl global initialization to network-active subcommands.
+         * curl_global_init initializes OpenSSL, crypto tables, and DNS state which
+         * adds 5-8ms of startup latency, needlessly penalizing offline commands like 'lang'.
+         */
+        curl_global_init(CURL_GLOBAL_ALL);
         AgentRuntime rt = {0}; strncpy(rt.objective, argv[2], MAX_TEXT - 1);
         for (int i = 3; i < argc; i++) if (strcmp(argv[i], "--approve") == 0) rt.is_approved = true;
         run_agent(&rt);
         printf("\n--- EXECUTION RESULT ---\n%.1000s\n", rt.result);
+        curl_global_cleanup();
     } else if (strcmp(argv[1], "lang") == 0 && argc >= 3) {
         LangInput in = {0}; strncpy(in.goal, argv[2], MAX_TEXT - 1);
         run_lang(&in);
     } else {
         printf("Error: Invalid arguments.\n");
+        return 1;
     }
-    curl_global_cleanup();
     return 0;
 }
